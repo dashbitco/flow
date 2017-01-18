@@ -2,7 +2,7 @@
 
 `Flow` allows developers to express computations on collections, similar to the `Enum` and `Stream` modules, although computations will be executed in parallel using multiple `GenStage`s.
 
-See documentation for [Flow](https://hexdocs.pm/flow) or [José Valim's keynote at ElixirConf 2017](https://youtu.be/srtMWzyqdp8?t=244) introducing the main concepts behind GenStage and Flow.
+See documentation for [Flow](https://hexdocs.pm/flow) or [José Valim's keynote at ElixirConf 2016](https://youtu.be/srtMWzyqdp8?t=244) introducing the main concepts behind GenStage and Flow.
 
 ## Installation
 
