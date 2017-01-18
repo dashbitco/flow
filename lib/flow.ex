@@ -48,7 +48,7 @@ defmodule Flow do
   the document before reducing it. If the document is, for example,
   2GB, we will load 2GB of data into memory.
 
-  We can improve the solution above by using the Stream module:
+  We can improve the solution above by using the `Stream` module:
 
       File.stream!("path/to/some/file")
       |> Stream.flat_map(&String.split(&1, " "))
