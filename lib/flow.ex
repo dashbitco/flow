@@ -405,7 +405,7 @@ defmodule Flow do
                    options: keyword(), window: Flow.Window.t}
 
   @typep producers :: nil |
-                      {:stages, GenStage.stage} |
+                      {:stages, GenStage.stage | [GenStage.stage]} |
                       {:enumerables, Enumerable.t} |
                       {:join, t, t, fun(), fun(), fun()} |
                       {:flows, [t]}
