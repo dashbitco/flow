@@ -414,7 +414,8 @@ defmodule Flow do
                       {:partition, keyword()} |
                       {:map_state, fun()} |
                       {:reduce, fun(), fun()} |
-                      {:window, Flow.Window.t}
+                      {:uniq, fun()}
+
 
   ## Building
 
