@@ -14,7 +14,7 @@ defmodule Flow do
   for certain cases, such as IO-bound flows, a smaller batch size
   can be configured through the `:min_demand` and `:max_demand`
   options supported by `from_enumerable/2`, `from_stages/2`
-  and `partition/3`.
+  and `partition/2`.
 
   Flow also provides the concepts of "windows" and "triggers",
   which allow developers to split the data into arbitrary
@@ -26,7 +26,7 @@ defmodule Flow do
   Flow with examples. There is also a presentation about GenStage
   and Flow from José Valim at ElixirConf 2016, which also covers
   data processing concepts for those unfamilar with the domain:
-  https://youtu.be/srtMWzyqdp8?t=244
+  <https://youtu.be/srtMWzyqdp8?t=244>
 
   ## Example
 
@@ -261,7 +261,7 @@ defmodule Flow do
   By default, all events belong to the same window (called the global
   window) which is partitioned across stages. However, different
   windowing strategies can be used by building a `Flow.Window`
-  and passing it to the `Flow.partition/3` function.
+  and passing it to the `Flow.partition/2` function.
 
   Once a window is specified, we can create triggers that tell us
   when to checkpoint the data, allowing us to report our progress
@@ -926,7 +926,7 @@ defmodule Flow do
   partition ends up with a map of words as keys and count as values.
   In the examples in the module documentation, we streamed those
   results to a single client using `Enum.to_list/1`. However, we
-  could use `departition/1` to reduce the data over multiple stages
+  could use `departition/5` to reduce the data over multiple stages
   returning one single map with all results:
 
       File.stream!("path/to/some/file")
