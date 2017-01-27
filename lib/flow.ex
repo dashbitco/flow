@@ -26,7 +26,7 @@ defmodule Flow do
   Flow with examples. There is also a presentation about GenStage
   and Flow from José Valim at ElixirConf 2016, which also covers
   data processing concepts for those unfamilar with the domain:
-  https://youtu.be/srtMWzyqdp8?t=244
+  <https://youtu.be/srtMWzyqdp8?t=244>
 
   ## Example
 
