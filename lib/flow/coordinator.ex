@@ -75,6 +75,9 @@ defmodule Flow.Coordinator do
       refs -> {:noreply, %{state | refs: refs}}
     end
   end
+  def handle_info({:EXIT, sup, reason}, %{supervisor: sup} = state) do
+    {:stop, reason, state}
+  end
 
   def terminate(_reason, %{supervisor: supervisor}) do
     ref = Process.monitor(supervisor)
