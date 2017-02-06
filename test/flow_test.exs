@@ -175,6 +175,13 @@ defmodule FlowTest do
       assert @flow |> Enum.sort() == [1, 2, 3, 4, 5, 6]
     end
 
+    test "fuses when there are more enumerables than stages" do
+      assert Flow.from_enumerables([[1, 2, 3], [4, 5, 6], 7..10], stages: 2)
+             |> Flow.map(fn _ -> self() end)
+             |> Enum.uniq
+             |> Enum.count == 3
+    end
+
     @tag :capture_log
     test "raises locally" do
       assert catch_exit(@flow |> Flow.map(fn _ -> raise "oops" end) |> Enum.to_list)
@@ -284,16 +291,22 @@ defmodule FlowTest do
           |> Flow.partition(stages: 4)
 
     test "only sources"  do
-      assert Flow.from_enumerables([[1, 2, 3], [4, 5, 6], 7..10], stages: 4)
-             |> Flow.partition(stages: 4)
+      assert @flow
              |> Enum.sort() == [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
-      assert Flow.from_enumerables([[1, 2, 3], [4, 5, 6], 7..10], stages: 4)
-             |> Flow.partition(stages: 4)
+      assert @flow
              |> Flow.reduce(fn -> [] end, &[&1 | &2])
              |> Flow.emit(:state)
              |> Enum.map(&Enum.sort/1)
              |> Enum.sort() == [[1, 5, 7, 9], [2, 6, 8], [3, 4], [10]]
+    end
+
+    test "fuses when there are more enumerables than stages" do
+      assert Flow.from_enumerables([[1, 2, 3], [4, 5, 6], 7..10], stages: 2)
+             |> Flow.map(fn _ -> self() end)
+             |> Flow.partition(stages: 4)
+             |> Enum.uniq
+             |> length() == 3
     end
 
     @tag :capture_log

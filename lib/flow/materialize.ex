@@ -131,7 +131,7 @@ defmodule Flow.Materialize do
     case ops do
       {:mapper, _compiled_ops, mapper_ops} when stages < length(enumerables) ->
         # Fuse mappers into enumerables if we have more enumerables than stages.
-        producers = start_enumerables(enumerables, mapper_ops, partition(options), start_link)
+        producers = start_enumerables(enumerables, mapper_ops, options, start_link)
         {producers, producers, :none, window}
       :none ->
         # If there are no ops, just start the enumerables with the options.
