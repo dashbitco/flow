@@ -452,6 +452,10 @@ defmodule Flow.Window do
     * `{:cont, acc}` - the reduce operation should continue as usual.
        `acc` is the trigger state.
 
+    * `{:cont, events, acc}` - the reduce operation should continue, but
+       only with the events you want to emit as part of the next state.
+       `acc` is the trigger state.
+
     * `{:trigger, name, pre, operation, pos, acc}` - where `name` is the
       trigger `name`, `pre` are the events to be consumed before the trigger,
       the `operation` configures the stage should `:keep` the reduce accumulator
@@ -461,8 +465,11 @@ defmodule Flow.Window do
   We recommend looking at the implementation of `trigger_every/3` as
   an example of a custom trigger.
   """
-  @spec trigger(t, (() -> acc), ([event], acc -> cont_tuple | trigger_tuple)) :: t
+  @spec trigger(t, (() -> acc), ([event], acc -> cont_tuple |
+                                                 cont_tuple_with_emitted_events |
+                                                 trigger_tuple)) :: t
         when cont_tuple: {:cont, acc},
+             cont_tuple_with_emitted_events: {:cont, [event], acc},
              trigger_tuple: {:trigger, trigger(), pre, accumulator(), pos, acc},
              pre: [event], pos: [event], acc: term(), event: term()
   def trigger(window, acc_fun, trigger_fun) do
