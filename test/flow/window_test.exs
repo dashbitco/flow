@@ -21,7 +21,7 @@ defmodule Flow.Window.Test do
 
   describe "custom trigger w/ :cont, emitted events and no emitted events" do
     setup do
-      flow = fn(window, parent) ->
+      flow = fn window, parent ->
         Flow.from_enumerables([[:a, :b, :c], [:a, :b, :c]], stages: 1)
         |> Flow.partition(window: window, stages: 1)
         |> Flow.reduce(fn -> [] end, & [&1 | &2])
@@ -29,7 +29,7 @@ defmodule Flow.Window.Test do
         |> Flow.start_link
       end
 
-      moving_event_trigger = fn(window, count, emitted, keep_or_reset) ->
+      moving_event_trigger = fn window, count, emitted, keep_or_reset ->
         name = {:moving_event_trigger, count}
         Flow.Window.trigger(window, fn -> [] end, fn events, acc ->
           new_acc = acc ++ events
@@ -49,7 +49,6 @@ defmodule Flow.Window.Test do
 
     @tag :custom_trigger
     test "skip on :cont w/ reset", context do
-
       window = Flow.Window.global |> context[:trigger].(2, [], :reset)
       {:ok, pid} = context[:flow].(window, self())
 
@@ -67,7 +66,6 @@ defmodule Flow.Window.Test do
 
     @tag :custom_trigger
     test "emit on :cont w/ reset", context do
-
       window = Flow.Window.global |> context[:trigger].(2, [:elixir], :reset)
       {:ok, pid} = context[:flow].(window, self())
 
@@ -83,8 +81,5 @@ defmodule Flow.Window.Test do
       ref = Process.monitor(pid)
       assert_receive {:DOWN, ^ref, _, _, _}
     end
-
   end
-
 end
-
