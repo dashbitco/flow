@@ -239,13 +239,13 @@ defmodule Flow do
   stages when a producer has emitted all events. This is done
   automatically by Flow when using `from_enumerable/2`. Custom
   producers can also send such notifications by calling
-  `GenStage.async_notification/2` from themselves:
+  `GenStage.async_notify/2` from themselves:
 
       # In the case all the data is done
-      GenStage.async_notification(self(), {:producer, :done})
+      GenStage.async_notify(self(), {:producer, :done})
 
       # In the case the producer halted due to an external factor
-      GenStage.async_notification(self(), {:producer, :halt})
+      GenStage.async_notify(self(), {:producer, :halt})
 
   However, when working with an unbounded stream of data, there is
   no such thing as data completion. So when can we consider a reduce
@@ -539,14 +539,14 @@ defmodule Flow do
   ## Termination
 
   Producer stages can signal the flow that it has emitted all
-  events by emitting a notification using `GenStage.async_notification/2`
+  events by emitting a notification using `GenStage.async_notify/2`
   from themselves:
 
       # In the case all the data is done
-      GenStage.async_notification(self(), {:producer, :done})
+      GenStage.async_notify(self(), {:producer, :done})
 
       # In the case the producer halted due to an external factor
-      GenStage.async_notification(self(), {:producer, :halt})
+      GenStage.async_notify(self(), {:producer, :halt})
 
   Your producer may also keep track of all consumers and automatically
   shut down when all consumers have exited.
