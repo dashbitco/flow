@@ -807,4 +807,28 @@ defmodule FlowTest do
                                 {10, 13}, {11, nil}, {nil, 7}, {nil, 8}, {nil, 12}]
     end
   end
+
+  describe "coordinator" do
+    test "subscribe to coordinator after into_stages start" do
+      {:ok, counter_pid} = GenStage.start_link(Counter, 0)
+      {:ok, forwarder} = GenStage.start_link(Forwarder, self())
+
+      {:ok, pid} =
+        Flow.from_stage(counter_pid, stages: 1)
+        |> Flow.filter(&rem(&1, 2) == 0)
+        |> Flow.partition(max_demand: 1, window: Flow.Window.global
+                                                 |> Flow.Window.trigger_every(1, :reset))
+        |> Flow.reduce(fn -> 0 end, & &1 + &2)
+        |> Flow.map_state(& [&1 + 1])
+        |> Flow.into_stages([])
+
+      GenStage.sync_subscribe(forwarder, to: pid)
+
+      assert_receive {:consumed, [1]}
+      refute_receive {:consumed, [2]}
+      assert_receive {:consumed, [3]}
+      assert_receive {:consumed, [5]}
+      assert_receive {:consumed, [7]}
+    end
+  end
 end
