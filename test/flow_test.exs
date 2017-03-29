@@ -21,19 +21,28 @@ defmodule FlowTest do
   defmodule Forwarder do
     use GenStage
 
+    def init({parent, opts}) do
+      {:consumer, %{parent: parent, opts: opts}}
+    end
+
     def init(parent) do
-      {:consumer, parent}
+      {:consumer, %{parent: parent, opts: []}}
     end
 
-    def handle_events(events, _from, parent) do
+    def handle_events(events, _from, %{parent: parent} = state) do
       send parent, {:consumed, events}
-      {:noreply, [], parent}
+      {:noreply, [], state}
     end
 
-    def handle_info({{pid, ref}, {:producer, _}}, parent) do
-      GenStage.cancel({pid, ref}, :normal)
-      {:noreply, [], parent}
+    def handle_info({{pid, ref}, {:producer, _} = msg}, %{parent: parent, opts: opts} = state) do
+      case Keyword.get(opts, :cancel, true) do
+        true -> GenStage.cancel({pid, ref}, :normal)
+        false -> send parent, msg
+      end
+
+      {:noreply, [], state}
     end
+
   end
 
   describe "errors" do
@@ -805,6 +814,49 @@ defmodule FlowTest do
                               window, & &1, & &1 - 3, &{&1, &2})
              |> Enum.sort() == [{0, nil}, {1, 4}, {2, 5}, {3, 6}, {9, nil},
                                 {10, 13}, {11, nil}, {nil, 7}, {nil, 8}, {nil, 12}]
+    end
+  end
+
+  describe "subscribe to process returned from into_stages ~ after the process starts" do
+    test "subscribe to a long-running producer_consumer process" do
+      {:ok, counter_pid} = GenStage.start_link(Counter, 0)
+      {:ok, forwarder} = GenStage.start_link(Forwarder, self())
+
+      {:ok, pid} =
+        Flow.from_stage(counter_pid, stages: 1)
+        |> Flow.filter(&rem(&1, 2) == 0)
+        |> Flow.partition(max_demand: 1, window: Flow.Window.global |> Flow.Window.trigger_every(1, :reset))
+        |> Flow.reduce(fn -> 0 end, & &1 + &2)
+        |> Flow.map_state(& [&1])
+        |> Flow.into_stages([])
+
+      GenStage.sync_subscribe(forwarder, to: pid)
+
+      assert_receive {:consumed, [0]}
+      refute_receive {:consumed, [1]}
+      assert_receive {:consumed, [2]}
+      assert_receive {:consumed, [4]}
+      assert_receive {:consumed, [6]}
+    end
+
+    test "attempt to subscribe after producer_consumer is done" do
+      {:ok, forwarder1} = GenStage.start_link(Forwarder, {self(), cancel: false})
+      {:ok, forwarder2} = GenStage.start_link(Forwarder, {self(), cancel: false})
+
+      {:ok, pid} =
+        Flow.from_enumerable(1..2, stages: 1)
+        |> Flow.filter(&rem(&1, 2) == 0)
+        |> Flow.reduce(fn -> 0 end, & &1 + &2)
+        |> Flow.map_state(& [&1])
+        |> Flow.into_stages([forwarder1])
+
+      refute_receive {:consumed, [1]}
+      assert_receive {:consumed, [2]}
+      assert_receive {:producer, :done}
+
+      ref = Process.monitor(forwarder2)
+      send pid, {:"$gen_producer", {forwarder2, ref}, {:subscribe, nil, []}}
+      assert_receive {:producer, :done}
     end
   end
 end

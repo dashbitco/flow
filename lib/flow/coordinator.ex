@@ -66,6 +66,13 @@ defmodule Flow.Coordinator do
     {:noreply, state}
   end
 
+  def handle_info({:"$gen_producer", {consumer, _},  {:subscribe, _, _}}, %{intermediary: intermediary} = state) do
+    for {pid, _} <- intermediary do
+      subscribe(consumer, pid)
+    end
+    {:noreply, state}
+  end
+
   def handle_info({:DOWN, ref, _, _, reason}, %{parent_ref: ref} = state) do
     {:stop, reason, state}
   end
