@@ -8,7 +8,7 @@ defmodule Flow.Window do
   window is materialized.
 
   Windows must be created by calling one of the window type functions.
-  There are currently two window types:
+  The supported window types are as follows:
 
     * Global windows - that's the default window which means all data
       belongs to one single window. In other words, the data is not
