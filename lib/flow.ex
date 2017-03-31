@@ -424,7 +424,7 @@ defmodule Flow do
 
   Calling this function is equivalent to:
 
-      Flow.from_enumerable([enumerable], options)
+      Flow.from_enumerables([enumerable], options)
 
   The enumerable is consumed in batches, retrieving `max_demand`
   items the first time and then `max_demand - min_demand` the
