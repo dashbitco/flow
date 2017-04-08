@@ -23,8 +23,8 @@ defmodule Flow do
   to peek at results as they are computed.
 
   This README will cover the main constructs and concepts behind
-  Flow with examples. There is also a presentation about GenStage
-  and Flow from José Valim at ElixirConf 2016, which also covers
+  Flow, with examples. There is also a presentation about GenStage
+  and Flow from José Valim at ElixirConf 2016, which covers
   data processing concepts for those unfamilar with the domain:
   <https://youtu.be/srtMWzyqdp8?t=244>
 
@@ -231,7 +231,7 @@ defmodule Flow do
   complete, how can we do so if the data never finishes?
 
   To answer this question, we need to talk about data completion,
-  triggers and windows.
+  windows and triggers.
 
   ## Data completion, windows and triggers
 
@@ -241,10 +241,10 @@ defmodule Flow do
   producers can also send such notifications by calling
   `GenStage.async_notify/2` from themselves:
 
-      # In the case all the data is done
+      # In the case where all the data is done
       GenStage.async_notify(self(), {:producer, :done})
 
-      # In the case the producer halted due to an external factor
+      # In the case where the producer halted due to an external factor
       GenStage.async_notify(self(), {:producer, :halt})
 
   However, when working with an unbounded stream of data, there is
@@ -254,25 +254,25 @@ defmodule Flow do
   To handle such cases, Flow provides windows and triggers. Windows
   allow us to split the data based on the event time while triggers
   tells us when to write the results we have computed so far. By
-  introducing windows, we no longer think the events are partitioned
+  introducing windows, we no longer think about events being partitioned
   across stages. Instead each event belongs to a window and the window
   is partitioned across the stages.
 
   By default, all events belong to the same window (called the global
-  window) which is partitioned across stages. However, different
+  window), which is partitioned across stages. However, different
   windowing strategies can be used by building a `Flow.Window`
   and passing it to the `Flow.partition/2` function.
 
   Once a window is specified, we can create triggers that tell us
   when to checkpoint the data, allowing us to report our progress
-  while the data streams through the system, regardless if the data
-  is bounded or unbounded.
+  while the data streams through the system, regardless of whether
+  the data is bounded or unbounded.
 
   Windows and triggers effectively control how the `reduce/3` function
-  works. `reduce/3` is invoked per window while a trigger configures
+  works. `reduce/3` is invoked per window, while a trigger configures
   when `reduce/3` halts so we can checkpoint the data before resuming
   the computation with an old or new accumulator. See `Flow.Window`
-  for a complete introduction into windows and triggers.
+  for a complete introduction to windows and triggers.
 
   ## Supervisable flows
 
@@ -360,8 +360,8 @@ defmodule Flow do
   ### Avoid single sources
 
   In the examples so far we have used a single file as our data
-  source. In practice such should be avoided as the source could
-  end up being the bottleneck of our whole computation.
+  source. In practice such single sources should be avoided as they
+  could end up being the bottleneck of our whole computation.
 
   In the file stream case above, instead of having one single
   large file, it is preferable to break the file into smaller
@@ -872,7 +872,7 @@ defmodule Flow do
        reducing function behaves, see `Flow.Window` for more information.
     * `:stages` - the number of partitions (reducer stages)
     * `:key` - the key to use when partitioning. It is a function
-      that receives a single argument: the event and must return its key.
+      that receives a single argument (the event) and must return its key.
       To facilitate customization, `:key` also allows common values, such as
       `{:elem, integer}` and `{:key, atom}`, to calculate the hash based on a
       tuple or a map field. See the "Key shortcuts" section below.
