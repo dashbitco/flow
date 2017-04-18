@@ -12,30 +12,31 @@ defmodule Flow.Window.Periodic do
     ref = make_ref()
     acc =
       fn ->
-        send_after(ref, duration)
-        {0, reducer_acc.()}
+        timer = send_after(ref, duration)
+        {0, timer, reducer_acc.()}
       end
 
     fun =
       if is_function(reducer_fun, 4) do
-        fn ref, events, {window, acc}, index ->
+        fn ref, events, {window, timer, acc}, index ->
           {emit, acc} = reducer_fun.(ref, events, acc, index)
-          {emit, {window, acc}}
+          {emit, {window, timer, acc}}
         end
       else
-        fn ref, events, {window, acc}, index ->
+        fn ref, events, {window, timer, acc}, index ->
           {emit, acc} = reducer_fun.(ref, events, acc, index, {:periodic, window, :placeholder})
-          {emit, {window, acc}}
+          {emit, {window, timer, acc}}
         end
       end
 
     trigger =
       fn
-        {window, acc}, index, op, ^ref ->
+        {window, timer, acc}, index, op, ^ref ->
           {emit, _} = reducer_trigger.(acc, index, op, {:periodic, window, :done})
-          send_after(ref, duration)
-          {emit, {window + 1, reducer_acc.()}}
-        {window, acc}, index, op, name ->
+          timer = send_after(ref, duration)
+          {emit, {window + 1, timer, reducer_acc.()}}
+        {window, timer, acc}, index, op, name ->
+          if name == :done, do: cancel_after(ref, timer)
           {emit, acc} = reducer_trigger.(acc, index, op, {:periodic, window, name})
           {emit, {window, acc}}
       end
@@ -45,5 +46,18 @@ defmodule Flow.Window.Periodic do
 
   defp send_after(ref, duration) do
     Process.send_after(self(), {:trigger, :keep, ref}, duration)
+  end
+
+  defp cancel_after(ref, timer) do
+    case Process.cancel_timer(timer) do
+      false ->
+        receive do
+          {:trigger, :keep, ^ref} -> :ok
+        after
+          0 -> :ok
+        end
+      _ ->
+        :ok
+    end
   end
 end
