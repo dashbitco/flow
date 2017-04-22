@@ -42,7 +42,6 @@ defmodule FlowTest do
 
       {:noreply, [], state}
     end
-
   end
 
   describe "errors" do
@@ -825,18 +824,19 @@ defmodule FlowTest do
       {:ok, pid} =
         Flow.from_stage(counter_pid, stages: 1)
         |> Flow.filter(&rem(&1, 2) == 0)
-        |> Flow.partition(max_demand: 1, window: Flow.Window.global |> Flow.Window.trigger_every(1, :reset))
+        |> Flow.partition(max_demand: 1, window: Flow.Window.global
+                                                 |> Flow.Window.trigger_every(1, :reset))
         |> Flow.reduce(fn -> 0 end, & &1 + &2)
-        |> Flow.map_state(& [&1])
+        |> Flow.map_state(& [&1 + 1])
         |> Flow.into_stages([])
 
       GenStage.sync_subscribe(forwarder, to: pid)
 
-      assert_receive {:consumed, [0]}
-      refute_receive {:consumed, [1]}
-      assert_receive {:consumed, [2]}
-      assert_receive {:consumed, [4]}
-      assert_receive {:consumed, [6]}
+      assert_receive {:consumed, [1]}
+      refute_receive {:consumed, [2]}
+      assert_receive {:consumed, [3]}
+      assert_receive {:consumed, [5]}
+      assert_receive {:consumed, [7]}
     end
 
     test "attempt to subscribe after producer_consumer is done" do
@@ -856,6 +856,7 @@ defmodule FlowTest do
 
       ref = Process.monitor(forwarder2)
       send pid, {:"$gen_producer", {forwarder2, ref}, {:subscribe, nil, []}}
+
       assert_receive {:producer, :done}
     end
   end

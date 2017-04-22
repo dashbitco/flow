@@ -31,7 +31,7 @@ defmodule Flow.Window.Periodic do
 
     trigger =
       fn
-        {window, timer, acc}, index, op, ^ref ->
+        {window, _timer, acc}, index, op, ^ref ->
           {emit, _} = reducer_trigger.(acc, index, op, {:periodic, window, :done})
           timer = send_after(ref, duration)
           {emit, {window + 1, timer, reducer_acc.()}}
