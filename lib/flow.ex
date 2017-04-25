@@ -753,7 +753,11 @@ defmodule Flow do
   the coordinator process, the coordinator process will simply
   redirect the subscription to the proper flow processes and
   cancel the initial subscription. This means it is recommended
-  that late subscriptions use `cancel: :transient`.
+  that late subscriptions use `cancel: :transient`. However
+  keep in mind the consumer will continue running when producers
+  exit with `:normal` or `:shutdown` reason. In order to properly
+  shutdown the application, it is recommended for consumers to
+  track subscriptions.
 
   ## Options
 
