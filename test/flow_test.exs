@@ -427,7 +427,7 @@ defmodule FlowTest do
       {:ok, _} =
         @flow
         |> Flow.filter(&rem(&1, 2) == 0)
-        |> Flow.into_stages([forwarder])
+        |> Flow.into_stages([{forwarder, cancel: :transient}])
 
       assert_receive {:consumed, [2]}
       assert_receive {:consumed, [4]}

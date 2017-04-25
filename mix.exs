@@ -21,7 +21,7 @@ defmodule Flow.Mixfile do
   end
 
   defp deps do
-    [{:gen_stage, "~> 0.11.0"},
+    [{:gen_stage, "~> 0.11.0", github: "elixir-lang/gen_stage", branch: "jv-exit-signals"},
      {:ex_doc, "~> 0.12", only: :docs},
      {:inch_ex, ">= 0.4.0", only: :docs}]
   end

@@ -51,10 +51,10 @@ defmodule Flow.Coordinator do
   end
 
   defp subscribe({consumer, opts}, producer) when is_list(opts) do
-    GenStage.sync_subscribe(consumer, [to: producer] ++ opts)
+    GenStage.sync_subscribe(consumer, [to: producer, cancel: :transient] ++ opts)
   end
   defp subscribe(consumer, producer) do
-    GenStage.sync_subscribe(consumer, [to: producer])
+    GenStage.sync_subscribe(consumer, [to: producer, cancel: :transient])
   end
 
   def handle_call(:stream, _from, %{producers: producers, intermediary: intermediary} = state) do
