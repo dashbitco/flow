@@ -29,11 +29,6 @@ defmodule FlowTest do
       send parent, {:consumed, events}
       {:noreply, [], parent}
     end
-
-    def handle_info({{pid, ref}, {:producer, _}}, parent) do
-      GenStage.cancel({pid, ref}, :normal)
-      {:noreply, [], parent}
-    end
   end
 
   describe "errors" do
@@ -809,6 +804,7 @@ defmodule FlowTest do
   end
 
   describe "coordinator" do
+    @tag :capture_log
     test "subscribe to coordinator after into_stages start" do
       {:ok, counter_pid} = GenStage.start_link(Counter, 0)
       {:ok, forwarder} = GenStage.start_link(Forwarder, self())
@@ -822,7 +818,7 @@ defmodule FlowTest do
         |> Flow.map_state(& [&1 + 1])
         |> Flow.into_stages([])
 
-      GenStage.sync_subscribe(forwarder, to: pid)
+      GenStage.sync_subscribe(forwarder, to: pid, cancel: :transient)
 
       assert_receive {:consumed, [1]}
       refute_receive {:consumed, [2]}

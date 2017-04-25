@@ -725,7 +725,16 @@ defmodule Flow do
   represents the consumer or a tuple with the consumer and the
   subscription options as defined in `GenStage.sync_subscribe/2`.
 
-  Receives the same options as `start_link/2`.
+  The `pid` returned by this function identifies a coordinator
+  process. While it is possible to send subscribe requests to
+  the coordinator process, the coordinator process will simply
+  redirect the subscription to the proper flow processes and
+  cancel the initial subscription. This means it is recommended
+  that late subscriptions use `cancel: :transient`.
+
+  ## Options
+
+  This function receives the same options as `start_link/2`.
   """
   @spec into_stages(t, consumers, keyword()) :: GenServer.on_start when
         consumers: [GenStage.stage | {GenStage.stage, keyword()}]
