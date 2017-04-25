@@ -275,15 +275,19 @@ defmodule Flow.Window.FixedTest do
     test "reduces per window with small demand" do
       # We were not suppose to receive all data but,
       # because we have two stages, we are only done
-      # once both stages are done, so we end-up consuming
-      # late events while the other producer is open.
-      assert Flow.from_enumerable(1..100, stages: 2)
-             |> Flow.map(& &1)
-             |> Flow.partition(window: double_unordered_window_without_lateness(),
-                               stages: 1, max_demand: 100)
-             |> Flow.reduce(fn -> 0 end, & &1 + &2)
-             |> Flow.emit(:state)
-             |> Enum.to_list() == [2630, 0, 2420]
+      # once both stages are done, so we may end-up
+      # consuming late events while the other producer is open.
+      result =
+        Flow.from_enumerable(1..100, stages: 2)
+        |> Flow.map(& &1)
+        |> Flow.partition(window: double_unordered_window_without_lateness(),
+                          stages: 1, max_demand: 100)
+        |> Flow.reduce(fn -> 0 end, & &1 + &2)
+        |> Flow.emit(:state)
+        |> Enum.to_list()
+
+      assert result == [2630, 0, 2420] or # In case we consume late events while terminating
+             result == [820, 0, 2420]     # In case we terminate fast (without late events)
     end
 
     test "triggers per window with small demand" do
@@ -296,13 +300,11 @@ defmodule Flow.Window.FixedTest do
              |> Enum.to_list() == [{78, 0, {:every, 12}},
                                    {300, 0, {:every, 12}},
                                    {666, 0, {:every, 12}},
+                                   {820, 0, :done},
+                                   {0, 1000, :done},
                                    {558, 2000, {:every, 12}},
                                    {1260, 2000, {:every, 12}},
                                    {2106, 2000, {:every, 12}},
-                                   {1496, 0, {:every, 12}},
-                                   {2630, 0, {:every, 12}},
-                                   {2630, 0, :done},
-                                   {0, 1000, :done},
                                    {2420, 2000, :done}]
     end
   end

@@ -47,7 +47,9 @@ defmodule Flow.Materialize do
     if window != Flow.Window.global do
       raise ArgumentError, "a window was set but no computation is happening on this partition"
     end
-    producers
+    for {producer, producer_opts} <- producers do
+      {producer, [cancel: :transient] ++ producer_opts}
+    end
   end
   defp start_stages({_mr, compiled_ops, _ops}, window, producers, start_link, type, opts) do
     {acc, reducer, trigger} = window_ops(window, compiled_ops, opts)
@@ -62,11 +64,12 @@ defmodule Flow.Materialize do
     for i <- 0..stages-1 do
       subscriptions =
         for {producer, producer_opts} <- producers do
-          {producer, [partition: i] ++ Keyword.merge(subscribe_opts, producer_opts)}
+          opts = Keyword.merge(subscribe_opts, producer_opts)
+          {producer, [partition: i, cancel: :transient] ++ opts}
         end
       arg = {type, [subscribe_to: subscriptions] ++ init_opts, {i, stages}, trigger, acc, reducer}
       {:ok, pid} = start_link.(Flow.MapReducer, arg, [])
-      {pid, []}
+      {pid, [cancel: :transient]}
     end
   end
 
@@ -146,7 +149,7 @@ defmodule Flow.Materialize do
   end
 
   defp start_enumerables(enumerables, ops, opts, start_link) do
-    opts = [consumers: :permanent, demand: :accumulate] ++ Keyword.take(opts, @map_reducer_opts)
+    opts = [demand: :accumulate] ++ Keyword.take(opts, @map_reducer_opts)
 
     for enumerable <- enumerables do
       stream =
