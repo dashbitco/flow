@@ -38,7 +38,7 @@ defmodule Flow.Window.Periodic do
         {window, timer, acc}, index, op, name ->
           if name == :done, do: cancel_after(ref, timer)
           {emit, acc} = reducer_trigger.(acc, index, op, {:periodic, window, name})
-          {emit, {window, acc}}
+          {emit, {window, timer, acc}}
       end
 
     {acc, fun, trigger}
