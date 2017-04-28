@@ -389,10 +389,10 @@ defmodule Flow.Materialize do
         maybe_punctuate(ref, pos, punctuation_fun, pun_acc, red_acc,
                         red_fun, index, name, trigger, collected ++ trigger_events ++ red_events)
       {:cont, [], pun_acc} ->
-        {[], {pun_acc, red_acc}}
+        {collected, {pun_acc, red_acc}}
       {:cont, emitted_events, pun_acc} ->
         {red_events, red_acc} = red_fun.(ref, emitted_events, red_acc, index)
-        {red_events, {pun_acc, red_acc}}
+        {collected ++ red_events, {pun_acc, red_acc}}
       {:cont, pun_acc} ->
         {red_events, red_acc} = red_fun.(ref, events, red_acc, index)
         {collected ++ red_events, {pun_acc, red_acc}}
