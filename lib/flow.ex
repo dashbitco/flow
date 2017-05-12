@@ -98,34 +98,15 @@ defmodule Flow do
       end)
       |> Enum.to_list()
 
-  This will execute the `flat_map` and `reduce`
-  operations in parallel inside multiple stages. When running
-  on a machine with two cores:
+  This will execute the `flat_map` and `reduce` operations in parallel
+  inside multiple stages. When running on a machine with two cores:
 
        [file stream]  # Flow.from_enumerable/1 (producer)
           |    |
         [M1]  [M2]    # Flow.flat_map/2 + Flow.reduce/3 (consumer)
 
-  Note that the stream events will be batched, so there is the possibility
-  that if the contents are too small the events are sent in a single batch
-  to a single stage. If you want to follow along this example you should set
-  `max_demand` to 1 when reading from the stream, so that the code
-  looks like this:
-
-      File.stream!("path/to/some/file")
-      |> Flow.from_enumerable(max_demand: 1)
-      |> Flow.flat_map(&String.split(&1, " "))
-      |> Flow.reduce(fn -> %{} end, fn word, acc ->
-        Map.update(acc, word, 1, & &1 + 1)
-      end)
-      |> Enum.to_list()
-
-  Now if the file contents are:
-
-      roses are red
-      violets are blue
-
-  The `M1` and `M2` stages above will receive the following lines:
+  Now imagine that the `M1` and `M2` stages above receive the
+  following lines:
 
       M1 - "roses are red"
       M2 - "violets are blue"
@@ -152,7 +133,22 @@ defmodule Flow do
   Although both stages have performed word counting, we have words
   like "are" that appear on both stages. This means we would need
   to perform yet another pass on the data merging the duplicated
-  words across stages.
+  words across stages. This step would have to run on a single process,
+  which would limit our ability to run concurrently.
+  
+  Remember that events are batched, so for small files, there is a chance
+  all lines will be set to the same stage (M1 or M2) and you won't be
+  able to replicate the issue. If you want to emulate this, either to
+  follow along or in your test suites, you may set `:max_demand` to 1
+  when reading from the stream, so that the code looks like this:
+
+      File.stream!("path/to/some/file")
+      |> Flow.from_enumerable(max_demand: 1)
+      |> Flow.flat_map(&String.split(&1, " "))
+      |> Flow.reduce(fn -> %{} end, fn word, acc ->
+        Map.update(acc, word, 1, & &1 + 1)
+      end)
+      |> Enum.to_list()
 
   Partitioning solves this by introducing a new set of stages and
   making sure the same word is always mapped to the same stage
@@ -160,7 +156,7 @@ defmodule Flow do
   `partition/1` back:
 
       File.stream!("path/to/some/file")
-      |> Flow.from_enumerable(max_demand: 1)
+      |> Flow.from_enumerable()
       |> Flow.flat_map(&String.split(&1, " "))
       |> Flow.partition()
       |> Flow.reduce(fn -> %{} end, fn word, acc ->
