@@ -66,6 +66,11 @@ defmodule Flow.MapReducer do
     %{status | active: [ref | active], producers: Map.put(producers, ref, pid)}
   end
 
+  defp consumer_status(pid, ref, %{done?: true, consumers: consumers} = status) do
+    send pid, {{pid, ref}, {:producer, :done}}
+    %{status | consumers: [ref | consumers]}
+  end
+
   defp consumer_status(_pid, ref, %{consumers: consumers} = status) do
     %{status | consumers: [ref | consumers]}
   end

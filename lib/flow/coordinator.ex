@@ -66,6 +66,21 @@ defmodule Flow.Coordinator do
     {:noreply, state}
   end
 
+  def handle_info({:"$gen_producer", {consumer, ref}, {:subscribe, _, _}}, %{intermediary: intermediary} = state) do
+    for {pid, _} <- intermediary do
+      subscribe(consumer, pid)
+    end
+
+    ## send cancellation to consumer to prevent additional asks for demand from the coordinator
+    send(consumer, {:"$gen_consumer", {self(), ref}, {:cancel, :normal}})
+    {:noreply, state}
+  end
+
+  ## TODO: finish comment discard here.
+  def handle_info({:"$gen_producer", _from,  {:ask, _}}, state) do
+    {:noreply, state}
+  end
+
   def handle_info({:DOWN, ref, _, _, reason}, %{parent_ref: ref} = state) do
     {:stop, reason, state}
   end
