@@ -106,8 +106,26 @@ defmodule Flow do
           |    |
         [M1]  [M2]    # Flow.flat_map/2 + Flow.reduce/3 (consumer)
 
-  Now imagine that the `M1` and `M2` stages above receive the
-  following lines:
+  Note that the stream events will be batched, so there is the possibility
+  that if the contents are too small the events are sent in a single batch
+  to a single stage. If you want to follow along this example you should set
+  `max_demand` to 1 when reading from the stream, so that the code
+  looks like this:
+
+      File.stream!("path/to/some/file")
+      |> Flow.from_enumerable(max_demand: 1)
+      |> Flow.flat_map(&String.split(&1, " "))
+      |> Flow.reduce(fn -> %{} end, fn word, acc ->
+        Map.update(acc, word, 1, & &1 + 1)
+      end)
+      |> Enum.to_list()
+
+  Now if the file contents are:
+
+      roses are red
+      violets are blue
+
+  The `M1` and `M2` stages above will receive the following lines:
 
       M1 - "roses are red"
       M2 - "violets are blue"
@@ -142,7 +160,7 @@ defmodule Flow do
   `partition/1` back:
 
       File.stream!("path/to/some/file")
-      |> Flow.from_enumerable()
+      |> Flow.from_enumerable(max_demand: 1)
       |> Flow.flat_map(&String.split(&1, " "))
       |> Flow.partition()
       |> Flow.reduce(fn -> %{} end, fn word, acc ->
