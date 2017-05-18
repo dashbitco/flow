@@ -135,7 +135,7 @@ defmodule Flow do
   to perform yet another pass on the data merging the duplicated
   words across stages. This step would have to run on a single process,
   which would limit our ability to run concurrently.
-  
+
   Remember that events are batched, so for small files, there is a chance
   all lines will be set to the same stage (M1 or M2) and you won't be
   able to replicate the issue. If you want to emulate this, either to
@@ -422,6 +422,7 @@ defmodule Flow do
                       {:stages, GenStage.stage | [GenStage.stage]} |
                       {:enumerables, Enumerable.t} |
                       {:join, t, t, fun(), fun(), fun()} |
+                      {:departition, t, fun(), fun(), fun()} |
                       {:flows, [t]}
 
   @typep operation :: {:mapper, atom(), [term()]} |
