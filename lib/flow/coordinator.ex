@@ -28,6 +28,11 @@ defmodule Flow.Coordinator do
     demand = Keyword.get(options, :demand, :forward)
     producers = Enum.map(producers, &elem(&1, 0))
 
+    for producer <- producers,
+        demand == :accumulate do
+      GenStage.demand(producer, demand)
+    end
+
     refs =
       for {pid, _} <- intermediary do
         for consumer <- consumers do
@@ -66,9 +71,9 @@ defmodule Flow.Coordinator do
     {:noreply, state}
   end
 
-  def handle_info({:"$gen_producer", {consumer, ref}, {:subscribe, _, _}}, %{intermediary: intermediary} = state) do
+  def handle_info({:"$gen_producer", {consumer, ref}, {:subscribe, _, opts}}, %{intermediary: intermediary} = state) do
     for {pid, _} <- intermediary do
-      subscribe(consumer, pid)
+      GenStage.async_subscribe(consumer, [to: pid] ++ opts)
     end
     send(consumer, {:"$gen_consumer", {self(), ref}, {:cancel, :normal}})
     {:noreply, state}

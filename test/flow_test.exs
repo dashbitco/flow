@@ -805,7 +805,7 @@ defmodule FlowTest do
 
   describe "coordinator" do
     @tag :capture_log
-    test "subscribe to coordinator after into_stages start" do
+    test "subscribes to coordinator after into_stages start" do
       {:ok, counter_pid} = GenStage.start_link(Counter, 0)
       {:ok, forwarder} = GenStage.start_link(Forwarder, self())
 
@@ -825,6 +825,31 @@ defmodule FlowTest do
       assert_receive {:consumed, [3]}
       assert_receive {:consumed, [5]}
       assert_receive {:consumed, [7]}
+    end
+
+    test "can be consumed as a stream" do
+      {:ok, counter_pid} = GenStage.start_link(Counter, 0)
+
+      {:ok, pid} =
+        Flow.from_stage(counter_pid, stages: 1, max_demand: 1)
+        |> Flow.filter(&rem(&1, 2) == 1)
+        |> Flow.into_stages([])
+
+      assert GenStage.stream([{pid, cancel: :transient}]) |> Enum.take(5) == [1, 3, 5, 7, 9]
+    end
+
+    test "sets demand to proxied" do
+      {:ok, counter_pid} = GenStage.start_link(Counter, 0)
+      {:ok, forwarder} = GenStage.start_link(Forwarder, self())
+
+      {:ok, pid} =
+        Flow.from_stage(counter_pid, stages: 1, max_demand: 1)
+        |> Flow.filter(&rem(&1, 2) == 1)
+        |> Flow.into_stages([forwarder], demand: :accumulate)
+
+      refute_received {:consumed, [1]}
+      assert GenStage.demand(pid, :forward)
+      assert_receive {:consumed, [1]}
     end
   end
 end
