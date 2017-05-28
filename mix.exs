@@ -1,7 +1,7 @@
 defmodule Flow.Mixfile do
   use Mix.Project
 
-  @version "0.11.1"
+  @version "0.12.0"
 
   def project do
     [app: :flow,
@@ -21,7 +21,7 @@ defmodule Flow.Mixfile do
   end
 
   defp deps do
-    [{:gen_stage, "~> 0.11.0", github: "elixir-lang/gen_stage", branch: "jv-exit-signals"},
+    [{:gen_stage, "~> 0.12.0"},
      {:ex_doc, "~> 0.12", only: :docs},
      {:inch_ex, ">= 0.4.0", only: :docs}]
   end

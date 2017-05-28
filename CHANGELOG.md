@@ -1,5 +1,13 @@
 # Changelog
 
+## v0.12.0
+
+  * Enhancements
+    * Allow late subscriptions to Flow returned by `Flow.into_stages`
+
+  * Bug fixes
+    * Cancel timer when termination is triggered on periodic window. This avoid invoking termination callbacks twice.
+
 ## v0.11.1
 
   * Enhancements
