@@ -550,18 +550,20 @@ defmodule Flow do
 
   ## Termination
 
-  Producer stages can signal the flow that it has emitted all
-  events by emitting a notification using `GenStage.async_notify/2`
-  from themselves:
+  Flow subscribes to producer stages using `cancel: :transient`.
+  This means producer stages can signal the flow that it has emitted
+  all events by terminating with reason `:normal`, `:shutdown` or
+  `{:shutdown, _}`. This is often done in the producer by using
+  `GenStage.async_info(self(), :terminate)` to send a message to
+  itself once all events have been dispatched:
 
-      # In the case all the data is done
-      GenStage.async_notify(self(), {:producer, :done})
+      def handle_info(:terminate, state) do
+        {:stop, :shutdown, state}
+      end
 
-      # In the case the producer halted due to an external factor
-      GenStage.async_notify(self(), {:producer, :halt})
-
-  Your producer may also keep track of all consumers and automatically
-  shut down when all consumers have exited.
+  Once all producers have finished, the stages subscribed to the producer
+  will terminate, causing the next layer of stages in the flow to terminate
+  and so forth, until the whole flow shuts down.
   """
   @spec from_stages([GenStage.stage], keyword) :: t
   def from_stages(stages, options \\ [])
