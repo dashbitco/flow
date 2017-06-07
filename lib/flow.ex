@@ -249,21 +249,10 @@ defmodule Flow do
 
   ## Data completion, windows and triggers
 
-  By default, Flow uses `GenStage`'s notification system to notify
-  stages when a producer has emitted all events. This is done
-  automatically by Flow when using `from_enumerable/2`. Custom
-  producers can also send such notifications by calling
-  `GenStage.async_notify/2` from themselves:
-
-      # In the case where all the data is done
-      GenStage.async_notify(self(), {:producer, :done})
-
-      # In the case where the producer halted due to an external factor
-      GenStage.async_notify(self(), {:producer, :halt})
-
-  However, when working with an unbounded stream of data, there is
-  no such thing as data completion. So when can we consider a reduce
-  function to be "completed"?
+  By default, Flow shuts down its processes when all data has been
+  processed. However, when working with an unbounded stream of data,
+  there is no such thing as data completion. So when can we consider
+  a reduce function to be "completed"?
 
   To handle such cases, Flow provides windows and triggers. Windows
   allow us to split the data based on the event time while triggers
