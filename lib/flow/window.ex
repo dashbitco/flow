@@ -352,6 +352,21 @@ defmodule Flow.Window do
   end
 
   @doc """
+  Returns a sliding event window of every `count` elements where each new window
+  starts `overlap` elements into the last window.
+
+  `count` and `overlap` must be a positive integer.
+
+  Sliding window triggers have the shape of `{:sliding, window, trigger_name}`,
+  where `window` is an incrementing integer identifying the window.
+  """
+  @spec sliding_event(pos_integer, pos_integer) :: t
+  def sliding_event(count, overlap)
+      when is_integer(count) and count > 0 and is_integer(overlap) and count > overlap do
+    %Flow.Window.SlidingEvent{count: count, overlap: overlap}
+  end
+
+  @doc """
   Returns a periodic-based window on every `count` `unit`.
 
   `count` is a positive integer and `unit` is one of `:millisecond`,
