@@ -52,7 +52,7 @@ defmodule Flow.Window do
   is equivalent to:
 
       Flow.from_stage(some_producer)
-      |> Flow.partition(Flow.Window.global())
+      |> Flow.partition(window: Flow.Window.global())
       |> Flow.reduce(fn -> 0 end, & &1 + 2)
 
   Even though the global window does not split the data in any way, it
