@@ -500,7 +500,7 @@ defmodule Flow do
   @spec from_enumerables([Enumerable.t], keyword) :: t
   def from_enumerables(enumerables, options \\ [])
 
-  def from_enumerables([_ | _] = enumerables, options) do
+  def from_enumerables(enumerables, options) when is_list(enumerables) do
     options = stages(options)
     {window, options} = Keyword.pop(options, :window, Flow.Window.global)
     %Flow{producers: {:enumerables, enumerables}, options: options, window: window}
@@ -568,7 +568,7 @@ defmodule Flow do
   @spec from_stages([GenStage.stage], keyword) :: t
   def from_stages(stages, options \\ [])
 
-  def from_stages([_ | _] = stages, options) do
+  def from_stages(stages, options) when is_list(stages) do
     options = stages(options)
     {window, options} = Keyword.pop(options, :window, Flow.Window.global)
     %Flow{producers: {:stages, stages}, options: options, window: window}
