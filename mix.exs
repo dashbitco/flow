@@ -21,7 +21,7 @@ defmodule Flow.Mixfile do
   end
 
   defp deps do
-    [{:gen_stage, "~> 0.12.0"},
+    [{:gen_stage, "~> 0.12.1"},
      {:ex_doc, "~> 0.12", only: :docs},
      {:inch_ex, ">= 0.4.0", only: :docs}]
   end
