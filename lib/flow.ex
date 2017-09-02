@@ -900,9 +900,10 @@ defmodule Flow do
     * `:stages` - the number of partitions (reducer stages)
     * `:key` - the key to use when partitioning. It is a function
       that receives a single argument (the event) and must return its key.
-      To facilitate customization, `:key` also allows common values, such as
-      `{:elem, integer}` and `{:key, atom}`, to calculate the hash based on a
-      tuple or a map field. See the "Key shortcuts" section below.
+      The key will then be hashed by Flow. To facilitate customization, `:key`
+      also allows common values, such as `{:elem, integer}` and `{:key, atom}`,
+      to calculate the hash based on a tuple or a map field. See the "Key shortcuts"
+      section below
     * `:hash` - the hashing function. By default a hashing function is built
       on the key but a custom one may be specified as described in
       `GenStage.PartitionDispatcher`
@@ -913,7 +914,7 @@ defmodule Flow do
 
   ## Key shortcuts
 
-  The following shortcuts can be given to the `:hash` option:
+  The following shortcuts can be given to the `:key` option:
 
     * `{:elem, pos}` - apply the hash function to the element
       at position `pos` in the given tuple
