@@ -33,10 +33,18 @@ defmodule Flow.Coordinator do
       GenStage.demand(producer, demand)
     end
 
+    subscribe_fn =
+      case Keyword.fetch(options, :timeout) do
+        ({:ok, timeout}) ->
+          &(subscribe(&1, &2, timeout))
+        (:error) ->
+          &(subscribe(&1, &2))
+      end
+
     refs =
       for {pid, _} <- intermediary do
         for consumer <- consumers do
-          subscribe(consumer, pid)
+          subscribe_fn.(consumer, pid)
         end
         Process.monitor(pid)
       end
@@ -53,6 +61,13 @@ defmodule Flow.Coordinator do
   defp start_supervisor() do
     children = [Supervisor.Spec.worker(GenStage, [], restart: :transient)]
     Supervisor.start_link(children, strategy: :simple_one_for_one, max_restarts: 0)
+  end
+
+  defp subscribe({consumer, opts}, producer, timeout) when is_list(opts) do
+    GenStage.sync_subscribe(consumer, [to: producer, cancel: :transient] ++ opts, timeout)
+  end
+  defp subscribe(consumer, producer, timeout) do
+    GenStage.sync_subscribe(consumer, [to: producer, cancel: :transient], timeout)
   end
 
   defp subscribe({consumer, opts}, producer) when is_list(opts) do
