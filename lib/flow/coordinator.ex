@@ -47,7 +47,7 @@ defmodule Flow.Coordinator do
     end
 
     {:ok, %{supervisor: sup, producers: producers, intermediary: intermediary,
-            refs: refs, parent_ref: Process.monitor(parent)}}
+            refs: refs, parent: parent, normal_exit: true}}
   end
 
   defp start_supervisor() do
@@ -89,14 +89,17 @@ defmodule Flow.Coordinator do
     {:noreply, state}
   end
 
-  def handle_info({:DOWN, ref, _, _, reason}, %{parent_ref: ref} = state) do
-    {:stop, reason, state}
-  end
-  def handle_info({:DOWN, ref, _, _, _}, %{refs: refs} = state) do
+  def handle_info({:DOWN, ref, _, _, reason}, %{refs: refs, normal_exit: normal_exit} = state) do
+    normal_exit = normal_exit and reason == :normal
+
     case List.delete(refs, ref) do
-      [] -> {:stop, :normal, state}
-      refs -> {:noreply, %{state | refs: refs}}
+      [] when normal_exit -> {:stop, :normal, state}
+      [] when not normal_exit -> {:stop, :shutdown, state}
+      refs -> {:noreply, %{state | refs: refs, normal_exit: normal_exit}}
     end
+  end
+  def handle_info({:EXIT, parent, reason}, %{parent: parent} = state) do
+    {:stop, reason, state}
   end
   def handle_info({:EXIT, sup, reason}, %{supervisor: sup} = state) do
     {:stop, reason, state}

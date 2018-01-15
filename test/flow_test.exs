@@ -57,13 +57,34 @@ defmodule FlowTest do
     end
 
     @tag :capture_log
-    test "on error in producer" do
+    test "on error in producer started via run" do
       assert catch_exit(
         :start
         |> Stream.iterate(fn _ -> raise "oops" end)
         |> Flow.from_enumerable(stages: 1, max_demand: 1)
         |> Flow.run
       )
+    end
+
+    @tag :capture_log
+    test "on error in producer started via start_link" do
+      Process.flag(:trap_exit, true)
+
+      {:ok, pid} =
+        []
+        |> Stream.take(0)
+        |> Flow.from_enumerable(stages: 1, max_demand: 1)
+        |> Flow.start_link
+
+      assert_receive {:EXIT, ^pid, :normal}
+
+      {:ok, pid} =
+        :start
+        |> Stream.iterate(fn _ -> raise "oops" end)
+        |> Flow.from_enumerable(stages: 1, max_demand: 1)
+        |> Flow.start_link
+
+      assert_receive {:EXIT, ^pid, :shutdown}
     end
   end
 

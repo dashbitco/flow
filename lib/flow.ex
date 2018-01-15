@@ -732,6 +732,8 @@ defmodule Flow do
     * `:subscribe_timeout` - timeout for the subscription between stages
       when setting up the flow. Defaults to `5_000` milliseconds.
 
+  The flow exits with reason `:normal` only if all consumers exit with
+  reason `:normal`. Otherwise exits with reason `:shutdown`.
   """
   @spec start_link(t, keyword()) :: GenServer.on_start
   def start_link(flow, options \\ []) do
@@ -750,12 +752,15 @@ defmodule Flow do
   process. While it is possible to send subscribe requests to
   the coordinator process, the coordinator process will simply
   redirect the subscription to the proper flow processes and
-  cancel the initial subscription. This means it is recommended
-  that late subscriptions use `cancel: :transient`. However
-  keep in mind the consumer will continue running when producers
-  exit with `:normal` or `:shutdown` reason. In order to properly
-  shutdown the application, it is recommended for consumers to
-  track subscriptions.
+  cancel the initial subscription. This means late subscriptions
+  should use at `cancel: :transient` (which is the default for
+  stage subscriptions). Keep in mind this implies consumers will
+  continue running when the producers exits with `:normal` or
+  `:shutdown` reason.
+
+  The coordinator exits with reason `:normal` only if all
+  consumers exit with reason `:normal`. Otherwise exits with
+  reason `:shutdown`.
 
   ## Options
 
