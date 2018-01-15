@@ -3,6 +3,7 @@ defmodule Flow.Materialize do
 
   @compile :inline_list_funcs
   @map_reducer_opts [:buffer_keep, :buffer_size, :dispatcher]
+  @supervisor_opts [:shutdown]
 
   def materialize(%{producers: nil}, _, _, _) do
     raise ArgumentError, "cannot execute a flow without producers, " <>
@@ -53,8 +54,11 @@ defmodule Flow.Materialize do
   end
   defp start_stages({_mr, compiled_ops, _ops}, window, producers, start_link, type, opts) do
     {acc, reducer, trigger} = window_ops(window, compiled_ops, opts)
+
     {stages, opts} = Keyword.pop(opts, :stages)
+    {supervisor_opts, opts} = Keyword.split(opts, @supervisor_opts)
     {init_opts, subscribe_opts} = Keyword.split(opts, @map_reducer_opts)
+
     init_opts =
       case type do
         :consumer -> Keyword.drop(init_opts, [:dispatcher])
@@ -68,7 +72,7 @@ defmodule Flow.Materialize do
           {producer, [partition: i, cancel: :transient] ++ opts}
         end
       arg = {type, [subscribe_to: subscriptions] ++ init_opts, {i, stages}, trigger, acc, reducer}
-      {:ok, pid} = start_link.(Flow.MapReducer, arg, [])
+      {:ok, pid} = start_link.([Flow.MapReducer, arg, []], supervisor_opts)
       {pid, [cancel: :transient]}
     end
   end
@@ -149,6 +153,7 @@ defmodule Flow.Materialize do
   end
 
   defp start_enumerables(enumerables, ops, opts, start_link) do
+    supervisor_opts = Keyword.take(opts, @supervisor_opts)
     opts = [demand: :accumulate] ++ Keyword.take(opts, @map_reducer_opts)
 
     for enumerable <- enumerables do
@@ -156,7 +161,7 @@ defmodule Flow.Materialize do
         :lists.foldl(fn {:mapper, fun, args}, acc ->
           apply(Stream, fun, [acc | args])
         end, enumerable, ops)
-      {:ok, pid} = start_link.(GenStage.Streamer, {stream, opts}, opts)
+      {:ok, pid} = start_link.([GenStage.Streamer, {stream, opts}, opts], supervisor_opts)
       {pid, []}
     end
   end

@@ -486,6 +486,8 @@ defmodule Flow do
     * `:stages` - the number of stages
     * `:buffer_keep` - how the buffer should behave, see `c:GenStage.init/1`
     * `:buffer_size` - how many events to buffer, see `c:GenStage.init/1`
+    * `:shutdown` - the shutdown time for this stage when the flow is shut down.
+      The same as the `:shutdown` value in a Supervisor, defaults to 5000 milliseconds.
 
   All remaining options are sent during subscription, allowing developers
   to customize `:min_demand`, `:max_demand` and others.
@@ -539,6 +541,8 @@ defmodule Flow do
     * `:stages` - the number of stages
     * `:buffer_keep` - how the buffer should behave, see `c:GenStage.init/1`
     * `:buffer_size` - how many events to buffer, see `c:GenStage.init/1`
+    * `:shutdown` - the shutdown time for this stage when the flow is shut down.
+      The same as the `:shutdown` value in a Supervisor, defaults to 5000 milliseconds.
 
   All remaining options are sent during subscription, allowing developers
   to customize `:min_demand`, `:max_demand` and others.
@@ -898,6 +902,8 @@ defmodule Flow do
     * `:window` - a `Flow.Window` struct which controls how the
        reducing function behaves, see `Flow.Window` for more information.
     * `:stages` - the number of partitions (reducer stages)
+    * `:shutdown` - the shutdown time for this stage when the flow is shut down.
+      The same as the `:shutdown` value in a Supervisor, defaults to 5000 milliseconds.
     * `:key` - the key to use when partitioning. It is a function
       that receives a single argument (the event) and must return its key.
       The key will then be hashed by Flow. To facilitate customization, `:key`

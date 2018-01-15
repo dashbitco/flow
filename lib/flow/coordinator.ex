@@ -19,11 +19,10 @@ defmodule Flow.Coordinator do
   def init({parent, flow, type, consumers, options}) do
     Process.flag(:trap_exit, true)
     {:ok, sup} = start_supervisor()
-    start_link = &Supervisor.start_child(sup, [&1, &2, &3])
     type_options = Keyword.take(options, [:dispatcher])
 
     {producers, intermediary} =
-      Flow.Materialize.materialize(flow, start_link, type, type_options)
+      Flow.Materialize.materialize(flow, &start_child(sup, &1, &2), type, type_options)
 
     demand = Keyword.get(options, :demand, :forward)
     producers = Enum.map(producers, &elem(&1, 0))
@@ -51,8 +50,13 @@ defmodule Flow.Coordinator do
   end
 
   defp start_supervisor() do
-    children = [Supervisor.Spec.worker(GenStage, [], restart: :transient)]
-    Supervisor.start_link(children, strategy: :simple_one_for_one, max_restarts: 0)
+    Supervisor.start_link([], strategy: :one_for_one, max_restarts: 0)
+  end
+
+  defp start_child(sup, args, opts) do
+    shutdown = Keyword.get(opts, :shutdown, 5000)
+    spec = {make_ref(), {GenStage, :start_link, args}, :transient, shutdown, :worker, [GenStage]}
+    Supervisor.start_child(sup, spec)
   end
 
   defp subscribe({consumer, opts}, producer) when is_list(opts) do
