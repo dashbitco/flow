@@ -55,6 +55,16 @@ defmodule FlowTest do
         Flow.from_enumerable([1, 2, 3], window: Flow.Window.fixed(1, :second, & &1)) |> Enum.to_list
       )
     end
+
+    @tag :capture_log
+    test "on error in producer" do
+      assert catch_exit(
+        :start
+        |> Stream.iterate(fn _ -> raise "oops" end)
+        |> Flow.from_enumerable(stages: 1, max_demand: 1)
+        |> Flow.run
+      )
+    end
   end
 
   describe "run/1" do
