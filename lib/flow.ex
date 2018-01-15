@@ -723,11 +723,14 @@ defmodule Flow do
 
     * `:dispatcher` - the dispatcher responsible for handling demands.
       Defaults to `GenStage.DemandDispatch`. May be either an atom or
-      a tuple with the dispatcher and the dispatcher options
+      a tuple with the dispatcher and the dispatcher options.
 
     * `:demand` - configures the demand on the flow producers to `:forward`
       or `:accumulate`. The default is `:forward`. See `GenStage.demand/2`
       for more information.
+
+    * `:subscribe_timeout` - timeout for the subscription between stages
+      when setting up the flow. Defaults to `5_000` milliseconds.
 
   """
   @spec start_link(t, keyword()) :: GenServer.on_start

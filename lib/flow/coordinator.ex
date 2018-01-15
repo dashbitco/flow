@@ -25,6 +25,7 @@ defmodule Flow.Coordinator do
       Flow.Materialize.materialize(flow, &start_child(sup, &1, &2), type, type_options)
 
     demand = Keyword.get(options, :demand, :forward)
+    timeout = Keyword.get(options, :subscribe_timeout, 5_000)
     producers = Enum.map(producers, &elem(&1, 0))
 
     for producer <- producers,
@@ -32,18 +33,10 @@ defmodule Flow.Coordinator do
       GenStage.demand(producer, demand)
     end
 
-    subscribe_fn =
-      case Keyword.fetch(options, :timeout) do
-        ({:ok, timeout}) ->
-          &(subscribe(&1, &2, timeout))
-        (:error) ->
-          &(subscribe(&1, &2))
-      end
-
     refs =
       for {pid, _} <- intermediary do
         for consumer <- consumers do
-          subscribe_fn.(consumer, pid)
+          subscribe(consumer, pid, timeout)
         end
         Process.monitor(pid)
       end
@@ -72,13 +65,6 @@ defmodule Flow.Coordinator do
   end
   defp subscribe(consumer, producer, timeout) do
     GenStage.sync_subscribe(consumer, [to: producer, cancel: :transient], timeout)
-  end
-
-  defp subscribe({consumer, opts}, producer) when is_list(opts) do
-    GenStage.sync_subscribe(consumer, [to: producer, cancel: :transient] ++ opts)
-  end
-  defp subscribe(consumer, producer) do
-    GenStage.sync_subscribe(consumer, [to: producer, cancel: :transient])
   end
 
   def handle_call(:stream, _from, %{producers: producers, intermediary: intermediary} = state) do

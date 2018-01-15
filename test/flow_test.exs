@@ -837,20 +837,16 @@ defmodule FlowTest do
       assert_receive {:consumed, [7]}
     end
 
-    test "fails to subscribe to coordinator after into_stages start" do
-      {:ok, counter_pid} = GenStage.start_link(Counter, 0)
+    @tag :capture_log
+    test "fails to subscribe to coordinator with subscription timeout" do
+      Process.flag(:trap_exit, true)
       {:ok, forwarder} = GenStage.start_link(Forwarder, self())
 
-      result =
-        Flow.from_stage(counter_pid, stages: 1)
-        |> Flow.filter(&rem(&1, 2) == 0)
-        |> Flow.partition(max_demand: 1, window: Flow.Window.global
-                                                 |> Flow.Window.trigger_every(1, :reset))
-        |> Flow.reduce(fn -> 0 end, & &1 + &2)
-        |> Flow.map_state(& [&1 + 1])
-        |> Flow.into_stages([forwarder], timeout: 0)
-
-      assert {:error, :timeout} == result
+      assert {:error, {:timeout, _}} =
+        :start
+        |> Stream.iterate(fn _ -> raise "oops" end)
+        |> Flow.from_enumerable(stages: 1, max_demand: 1)
+        |> Flow.into_stages([forwarder], subscribe_timeout: 0)
     end
 
     test "can be consumed as a stream" do
