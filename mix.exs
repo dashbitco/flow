@@ -1,7 +1,7 @@
 defmodule Flow.Mixfile do
   use Mix.Project
 
-  @version "0.12.0"
+  @version "0.13.0-dev"
 
   def project do
     [app: :flow,
@@ -21,7 +21,7 @@ defmodule Flow.Mixfile do
   end
 
   defp deps do
-    [{:gen_stage, "~> 0.12.1"},
+    [{:gen_stage, "~> 0.13.0"},
      {:ex_doc, "~> 0.12", only: :docs},
      {:inch_ex, ">= 0.4.0", only: :docs}]
   end

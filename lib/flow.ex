@@ -1450,5 +1450,9 @@ defmodule Flow do
     def member?(_flow, _value) do
       {:error, __MODULE__}
     end
+
+    def slice(_flow) do
+      {:error, __MODULE__}
+    end
   end
 end
