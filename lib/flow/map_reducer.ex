@@ -3,7 +3,6 @@ defmodule Flow.MapReducer do
   use GenStage
 
   def init({type, opts, index, trigger, acc, reducer}) do
-    Process.flag(:trap_exit, true)
     {type, {%{}, build_status(type, trigger), index, acc.(), reducer}, opts}
   end
 

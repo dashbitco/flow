@@ -3,11 +3,11 @@ defmodule Flow.Coordinator do
   use GenServer
 
   def start_link(flow, type, consumers, options) do
-    GenServer.start_link(__MODULE__, {self(), flow, type, consumers, options}, options)
+    GenServer.start_link(__MODULE__, {flow, type, consumers, options}, options)
   end
 
   def start(flow, type, consumers, options) do
-    GenServer.start(__MODULE__, {self(), flow, type, consumers, options}, options)
+    GenServer.start(__MODULE__, {flow, type, consumers, options}, options)
   end
 
   def stream(pid) do
@@ -16,20 +16,20 @@ defmodule Flow.Coordinator do
 
   ## Callbacks
 
-  def init({parent, flow, type, consumers, options}) do
+  def init({flow, type, consumers, options}) do
     Process.flag(:trap_exit, true)
-    {:ok, sup} = start_supervisor()
     type_options = Keyword.take(options, [:dispatcher])
 
-    {producers, intermediary} =
-      Flow.Materialize.materialize(flow, &start_child(sup, &1, &2), type, type_options)
+    {:ok, producers_supervisor} = start_supervisor(0)
+    {:ok, intermediary_supervisor} = start_supervisor(1_000_000)
+    start_link = &start_child(&1, producers_supervisor, intermediary_supervisor, &2, &3)
+    {producers, intermediary} = Flow.Materialize.materialize(flow, start_link, type, type_options)
 
     demand = Keyword.get(options, :demand, :forward)
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
     producers = Enum.map(producers, &elem(&1, 0))
 
-    for producer <- producers,
-        demand == :accumulate do
+    for producer <- producers, demand == :accumulate do
       GenStage.demand(producer, demand)
     end
 
@@ -41,23 +41,38 @@ defmodule Flow.Coordinator do
         Process.monitor(pid)
       end
 
-    for producer <- producers,
-        demand == :forward do
+    for producer <- producers, demand == :forward do
       GenStage.demand(producer, demand)
     end
 
-    {:ok, %{supervisor: sup, producers: producers, intermediary: intermediary,
-            refs: refs, parent: parent, normal_exit: true}}
+    state = %{
+      intermediary: intermediary,
+      intermediary_supervisor: intermediary_supervisor,
+      normal_exit: true,
+      refs: refs,
+      producers: producers,
+      producers_supervisor: producers_supervisor
+    }
+
+    {:ok, state}
   end
 
-  defp start_supervisor() do
-    Supervisor.start_link([], strategy: :one_for_one, max_restarts: 0)
+  # We have a supervisor for producers and another for producer_consumers.
+  #
+  # If any producer crashes with non-normal/non-shutdown exit, it causes
+  # other producers to exit eventually leading to the termination of all
+  # map reducers.
+  #
+  # Once all map reducers exit, the coordinator exits too.
+  defp start_supervisor(max_restarts) do
+    Supervisor.start_link([], strategy: :one_for_one, max_restarts: max_restarts)
   end
 
-  defp start_child(sup, args, opts) do
+  defp start_child(type, producers_supervisor, intermediary_supervisor, args, opts) do
+    supervisor = if type == :producer, do: producers_supervisor, else: intermediary_supervisor
     shutdown = Keyword.get(opts, :shutdown, 5000)
     spec = {make_ref(), {GenStage, :start_link, args}, :transient, shutdown, :worker, [GenStage]}
-    Supervisor.start_child(sup, spec)
+    Supervisor.start_child(supervisor, spec)
   end
 
   defp subscribe({consumer, opts}, producer, timeout) when is_list(opts) do
@@ -98,14 +113,19 @@ defmodule Flow.Coordinator do
       refs -> {:noreply, %{state | refs: refs, normal_exit: normal_exit}}
     end
   end
-  def handle_info({:EXIT, parent, reason}, %{parent: parent} = state) do
-    {:stop, reason, state}
-  end
-  def handle_info({:EXIT, sup, reason}, %{supervisor: sup} = state) do
-    {:stop, reason, state}
+  def handle_info(_, state) do
+    {:noreply, state}
   end
 
-  def terminate(_reason, %{supervisor: supervisor}) do
+  def terminate(_reason, state) do
+    # Terminate from consumers to producers.
+    # Terminating producers first would cause consumers to terminate early.
+    terminate_supervisor(state.intermediary_supervisor)
+    terminate_supervisor(state.producers_supervisor)
+    :ok
+  end
+
+  defp terminate_supervisor(supervisor) do
     ref = Process.monitor(supervisor)
     Process.exit(supervisor, :shutdown)
     receive do
