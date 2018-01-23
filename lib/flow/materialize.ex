@@ -72,7 +72,7 @@ defmodule Flow.Materialize do
           {producer, [partition: i, cancel: :transient] ++ opts}
         end
       arg = {type, [subscribe_to: subscriptions] ++ init_opts, {i, stages}, trigger, acc, reducer}
-      {:ok, pid} = start_link.(:producer_consumer, [Flow.MapReducer, arg, []], supervisor_opts)
+      {:ok, pid} = start_link.([Flow.MapReducer, arg, []], supervisor_opts)
       {pid, [cancel: :transient]}
     end
   end
@@ -161,7 +161,7 @@ defmodule Flow.Materialize do
         :lists.foldl(fn {:mapper, fun, args}, acc ->
           apply(Stream, fun, [acc | args])
         end, enumerable, ops)
-      {:ok, pid} = start_link.(:producer, [GenStage.Streamer, {stream, opts}, opts], supervisor_opts)
+      {:ok, pid} = start_link.([GenStage.Streamer, {stream, opts}, opts], supervisor_opts)
       {pid, []}
     end
   end

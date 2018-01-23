@@ -20,9 +20,8 @@ defmodule Flow.Coordinator do
     Process.flag(:trap_exit, true)
     type_options = Keyword.take(options, [:dispatcher])
 
-    {:ok, producers_supervisor} = start_supervisor()
-    {:ok, intermediary_supervisor} = start_supervisor()
-    start_link = &start_child(&1, producers_supervisor, intermediary_supervisor, &2, &3)
+    {:ok, supervisor} = start_supervisor()
+    start_link = &start_child(supervisor, &1, &2)
     {producers, intermediary} = Flow.Materialize.materialize(flow, start_link, type, type_options)
 
     demand = Keyword.get(options, :demand, :forward)
@@ -47,10 +46,9 @@ defmodule Flow.Coordinator do
 
     state = %{
       intermediary: intermediary,
-      intermediary_supervisor: intermediary_supervisor,
       refs: refs,
       producers: producers,
-      producers_supervisor: producers_supervisor
+      supervisor: supervisor
     }
 
     {:ok, state}
@@ -67,8 +65,7 @@ defmodule Flow.Coordinator do
     Supervisor.start_link([], strategy: :one_for_one, max_restarts: 0)
   end
 
-  defp start_child(type, producers_supervisor, intermediary_supervisor, args, opts) do
-    supervisor = if type == :producer, do: producers_supervisor, else: intermediary_supervisor
+  defp start_child(supervisor, args, opts) do
     shutdown = Keyword.get(opts, :shutdown, 5000)
     spec = {make_ref(), {GenStage, :start_link, args}, :temporary, shutdown, :worker, [GenStage]}
     Supervisor.start_child(supervisor, spec)
@@ -129,15 +126,7 @@ defmodule Flow.Coordinator do
     {:noreply, state}
   end
 
-  def terminate(_reason, state) do
-    # Terminate from consumers to producers.
-    # Terminating producers first would cause consumers to terminate early.
-    terminate_supervisor(state.intermediary_supervisor)
-    terminate_supervisor(state.producers_supervisor)
-    :ok
-  end
-
-  defp terminate_supervisor(supervisor) do
+  def terminate(_reason, %{supervisor: supervisor}) do
     ref = Process.monitor(supervisor)
     Process.exit(supervisor, :shutdown)
     receive do
