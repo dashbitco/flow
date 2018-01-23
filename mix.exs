@@ -1,7 +1,7 @@
 defmodule Flow.Mixfile do
   use Mix.Project
 
-  @version "0.13.0-dev"
+  @version "0.13.0"
 
   def project do
     [app: :flow,

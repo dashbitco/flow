@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.13.0 (2018-01-23)
+
+  * Enhancements
+    * Expose a timeout parameter for start_link and into_stages
+    * Allow shutdown time for stages to be configured
+
+  * Bug fixes
+    * Ensure proper shutdown propagation on start_link, into_stages and friends (#40)
+    * Ensure proper shutdown order in Flow (#35)
+
 ## v0.12.0
 
   * Enhancements
