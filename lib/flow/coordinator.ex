@@ -20,8 +20,8 @@ defmodule Flow.Coordinator do
     Process.flag(:trap_exit, true)
     type_options = Keyword.take(options, [:dispatcher])
 
-    {:ok, producers_supervisor} = start_supervisor(0)
-    {:ok, intermediary_supervisor} = start_supervisor(1_000_000)
+    {:ok, producers_supervisor} = start_supervisor()
+    {:ok, intermediary_supervisor} = start_supervisor()
     start_link = &start_child(&1, producers_supervisor, intermediary_supervisor, &2, &3)
     {producers, intermediary} = Flow.Materialize.materialize(flow, start_link, type, type_options)
 
@@ -48,7 +48,6 @@ defmodule Flow.Coordinator do
     state = %{
       intermediary: intermediary,
       intermediary_supervisor: intermediary_supervisor,
-      normal_exit: true,
       refs: refs,
       producers: producers,
       producers_supervisor: producers_supervisor
@@ -64,14 +63,14 @@ defmodule Flow.Coordinator do
   # map reducers.
   #
   # Once all map reducers exit, the coordinator exits too.
-  defp start_supervisor(max_restarts) do
-    Supervisor.start_link([], strategy: :one_for_one, max_restarts: max_restarts)
+  defp start_supervisor() do
+    Supervisor.start_link([], strategy: :one_for_one, max_restarts: 0)
   end
 
   defp start_child(type, producers_supervisor, intermediary_supervisor, args, opts) do
     supervisor = if type == :producer, do: producers_supervisor, else: intermediary_supervisor
     shutdown = Keyword.get(opts, :shutdown, 5000)
-    spec = {make_ref(), {GenStage, :start_link, args}, :transient, shutdown, :worker, [GenStage]}
+    spec = {make_ref(), {GenStage, :start_link, args}, :temporary, shutdown, :worker, [GenStage]}
     Supervisor.start_child(supervisor, spec)
   end
 
@@ -104,13 +103,26 @@ defmodule Flow.Coordinator do
     {:noreply, state}
   end
 
-  def handle_info({:DOWN, ref, _, _, reason}, %{refs: refs, normal_exit: normal_exit} = state) do
-    normal_exit = normal_exit and reason == :normal
+  def handle_info({:DOWN, ref, _, _, reason}, %{refs: refs} = state) do
+    if ref in refs do
+      refs = List.delete(refs, ref)
+      state = %{state | refs: refs}
 
-    case List.delete(refs, ref) do
-      [] when normal_exit -> {:stop, :normal, state}
-      [] when not normal_exit -> {:stop, :shutdown, state}
-      refs -> {:noreply, %{state | refs: refs, normal_exit: normal_exit}}
+      non_normal_shutdown? =
+        case reason do
+          :normal -> false
+          :shutdown -> false
+          {:shutdown, _} -> false
+          _ -> true
+        end
+
+      cond do
+        non_normal_shutdown? -> {:stop, :shutdown, state}
+        refs == [] -> {:stop, :normal, state}
+        true -> {:noreply, state}
+      end
+    else
+      {:noreply, state}
     end
   end
   def handle_info(_, state) do
