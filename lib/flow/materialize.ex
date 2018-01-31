@@ -167,10 +167,15 @@ defmodule Flow.Materialize do
   end
 
   defp partition(options) do
-    stages = Keyword.fetch!(options, :stages)
-    hash = options[:hash] || hash_by_key(options[:key], stages)
-    dispatcher_opts = [partitions: 0..stages-1, hash: hash(hash)]
-    [dispatcher: {GenStage.PartitionDispatcher, dispatcher_opts}]
+    case Keyword.fetch!(options, :stages) do
+      1 ->
+        [dispatcher: GenStage.DemandDispatcher]
+
+      stages ->
+        hash = options[:hash] || hash_by_key(options[:key], stages)
+        dispatcher_opts = [partitions: 0..stages-1, hash: hash(hash)]
+        [dispatcher: {GenStage.PartitionDispatcher, dispatcher_opts}]
+    end
   end
 
   defp hash(fun) when is_function(fun, 1) do

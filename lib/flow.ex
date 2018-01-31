@@ -930,8 +930,8 @@ defmodule Flow do
 
   The following shortcuts can be given to the `:key` option:
 
-    * `{:elem, pos}` - apply the hash function to the element
-      at position `pos` in the given tuple
+    * `{:elem, index}` - apply the hash function to the element
+      at `index` (zero-based) in the given tuple
 
     * `{:key, key}` - apply the hash function to the key of a given map
 
