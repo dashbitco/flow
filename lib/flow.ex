@@ -1035,12 +1035,16 @@ defmodule Flow do
   Merges the given flows into a new partition with the given
   window and options.
 
-  Similar to `partition/2`, this function will partition
-  the data, routing events with the same characteristics
-  to the same partition.
+  This function is equivalent to `partition/2`, routing events
+  with the same characteristics to the same partition, except
+  it allows multiple flows to be merged and partitioned at
+  the same time.
 
   It accepts the same options and hash shortcuts as
   `partition/2`. See `partition/2` for more information.
+
+  If you want to merge multiple flows but not partition them,
+  you can set the `:dispatcher` option to `GenStage.DemandDispatcher`.
 
   ## Examples
 
