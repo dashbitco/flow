@@ -798,7 +798,7 @@ defmodule Flow do
 
   ## Examples
 
-      iex> flow = [1, 2, 3] |> Flow.from_enumerable() |> Flow.filter(& rem(&1, 2) == 0)
+      iex> flow = [1, 2, 3] |> Flow.from_enumerable() |> Flow.filter(&(rem(&1, 2) == 0))
       iex> Enum.sort(flow) # Call sort as we have no order guarantee
       [2]
 
@@ -813,7 +813,7 @@ defmodule Flow do
 
   ## Examples
 
-      iex> flow = [1, 2, 3] |> Flow.from_enumerable() |> Flow.filter_map(& rem(&1, 2) == 0, & &1 * 2)
+      iex> flow = [1, 2, 3] |> Flow.from_enumerable() |> Flow.filter_map(&(rem(&1, 2) == 0), &(&1 * 2))
       iex> Enum.sort(flow) # Call sort as we have no order guarantee
       [4]
 
@@ -828,11 +828,11 @@ defmodule Flow do
 
   ## Examples
 
-      iex> flow = [1, 2, 3] |> Flow.from_enumerable() |> Flow.map(& &1 * 2)
+      iex> flow = [1, 2, 3] |> Flow.from_enumerable() |> Flow.map(&(&1 * 2))
       iex> Enum.sort(flow) # Call sort as we have no order guarantee
       [2, 4, 6]
 
-      iex> flow = Flow.from_enumerables([[1, 2, 3], 1..3]) |> Flow.map(& &1 * 2)
+      iex> flow = Flow.from_enumerables([[1, 2, 3], 1..3]) |> Flow.map(&(&1 * 2))
       iex> Enum.sort(flow)
       [2, 2, 4, 4, 6, 6]
 
@@ -851,7 +851,7 @@ defmodule Flow do
   ## Examples
 
       iex> flow = Flow.from_enumerable([foo: 1, foo: 2, bar: 3, foo: 4, bar: 5], stages: 1)
-      iex> flow |> Flow.group_by_key |> Flow.map_values(&Enum.sort/1) |> Enum.sort()
+      iex> flow |> Flow.group_by_key() |> Flow.map_values(&Enum.sort/1) |> Enum.sort()
       [bar: [3, 5], foo: [1, 2, 4]]
 
   """
@@ -865,7 +865,7 @@ defmodule Flow do
 
   ## Examples
 
-      iex> flow = [1, 2, 3] |> Flow.from_enumerable() |> Flow.flat_map(fn(x) -> [x, x * 2] end)
+      iex> flow = [1, 2, 3] |> Flow.from_enumerable() |> Flow.flat_map(fn x -> [x, x * 2] end)
       iex> Enum.sort(flow) # Call sort as we have no order guarantee
       [1, 2, 2, 3, 4, 6]
 
@@ -880,7 +880,7 @@ defmodule Flow do
 
   ## Examples
 
-      iex> flow = [1, 2, 3] |> Flow.from_enumerable() |> Flow.reject(& rem(&1, 2) == 0)
+      iex> flow = [1, 2, 3] |> Flow.from_enumerable() |> Flow.reject(&(rem(&1, 2) == 0))
       iex> Enum.sort(flow) # Call sort as we have no order guarantee
       [1, 3]
 
@@ -1137,7 +1137,7 @@ defmodule Flow do
   the list of the most accessed URLs.
 
       iex> urls = ~w(www.foo.com www.bar.com www.foo.com www.foo.com www.baz.com)
-      iex> flow = urls |> Flow.from_enumerable |> Flow.partition()
+      iex> flow = urls |> Flow.from_enumerable() |> Flow.partition()
       iex> flow = flow |> Flow.reduce(fn -> %{} end, fn url, map ->
       ...>   Map.update(map, url, 1, & &1 + 1)
       ...> end)
@@ -1209,7 +1209,7 @@ defmodule Flow do
   ## Examples
 
       iex> flow = Flow.from_enumerable([foo: 1, foo: 2, bar: 3, foo: 4, bar: 5], stages: 1)
-      iex> flow |> Flow.group_by_key |> Flow.emit(:state) |> Enum.to_list()
+      iex> flow |> Flow.group_by_key() |> Flow.emit(:state) |> Enum.to_list()
       [%{foo: [4, 2, 1], bar: [5, 3]}]
 
   """
