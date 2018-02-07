@@ -62,9 +62,9 @@ defmodule Flow.Window do
   For example, the flow below uses a global window with a count-based
   trigger to emit the values being summed as we sum them:
 
-      iex> window = Flow.Window.global |> Flow.Window.trigger_every(10)
+      iex> window = Flow.Window.global() |> Flow.Window.trigger_every(10)
       iex> flow = Flow.from_enumerable(1..100) |> Flow.partition(window: window, stages: 1)
-      iex> flow |> Flow.reduce(fn -> 0 end, & &1 + &2) |> Flow.emit(:state) |> Enum.to_list()
+      iex> flow |> Flow.reduce(fn -> 0 end, &(&1 + &2)) |> Flow.emit(:state) |> Enum.to_list()
       [55, 210, 465, 820, 1275, 1830, 2485, 3240, 4095, 5050, 5050]
 
   Let's explore the types of triggers available next.
@@ -243,7 +243,7 @@ defmodule Flow.Window do
 
       iex> window = Flow.Window.count(10)
       iex> flow = Flow.from_enumerable(1..100) |> Flow.partition(window: window, stages: 1)
-      iex> flow |> Flow.reduce(fn -> 0 end, & &1 + &2) |> Flow.emit(:state) |> Enum.to_list()
+      iex> flow |> Flow.reduce(fn -> 0 end, &(&1 + &2)) |> Flow.emit(:state) |> Enum.to_list()
       [55, 155, 255, 355, 455, 555, 655, 755, 855, 955, 0]
 
   Count windows are also similar to global windows that use `trigger_every/2`
@@ -495,17 +495,17 @@ defmodule Flow.Window do
   a trigger with the state every 10 items. The extra 5050 value at the
   end is the trigger emitted because processing is done.
 
-      iex> window = Flow.Window.global |> Flow.Window.trigger_every(10)
+      iex> window = Flow.Window.global() |> Flow.Window.trigger_every(10)
       iex> flow = Flow.from_enumerable(1..100) |> Flow.partition(window: window, stages: 1)
-      iex> flow |> Flow.reduce(fn -> 0 end, & &1 + &2) |> Flow.emit(:state) |> Enum.to_list()
+      iex> flow |> Flow.reduce(fn -> 0 end, &(&1 + &2)) |> Flow.emit(:state) |> Enum.to_list()
       [55, 210, 465, 820, 1275, 1830, 2485, 3240, 4095, 5050, 5050]
 
   Now let's see an example similar to above except we reset the counter
   on every trigger. At the end, the sum of all values is still 5050:
 
-      iex> window = Flow.Window.global |> Flow.Window.trigger_every(10, :reset)
+      iex> window = Flow.Window.global() |> Flow.Window.trigger_every(10, :reset)
       iex> flow = Flow.from_enumerable(1..100) |> Flow.partition(window: window, stages: 1)
-      iex> flow |> Flow.reduce(fn -> 0 end, & &1 + &2) |> Flow.emit(:state) |> Enum.to_list()
+      iex> flow |> Flow.reduce(fn -> 0 end, &(&1 + &2)) |> Flow.emit(:state) |> Enum.to_list()
       [55, 155, 255, 355, 455, 555, 655, 755, 855, 955, 0]
 
   """
