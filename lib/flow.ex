@@ -424,7 +424,7 @@ defmodule Flow do
   ## Building
 
   @doc """
-  Starts a flow with the given enumerable as the producer.
+  Creates a flow with the given enumerable as the producer.
 
   Calling this function is equivalent to:
 
@@ -467,7 +467,7 @@ defmodule Flow do
   end
 
   @doc """
-  Starts a flow with the given enumerable as producer.
+  Creates a flow with the given enumerable as producer.
 
   The enumerable is consumed in batches, retrieving `max_demand`
   items the first time and then `max_demand - min_demand` the
@@ -512,7 +512,7 @@ defmodule Flow do
   end
 
   @doc """
-  Starts a flow with the given stage as producer.
+  Creates a flow with the given stage as producer.
 
   Calling this function is equivalent to:
 
@@ -531,7 +531,7 @@ defmodule Flow do
   end
 
   @doc """
-  Starts a flow with the list of stages as producers.
+  Creates a flow with the list of stages as producers.
 
   ## Options
 
