@@ -293,8 +293,7 @@ defmodule Flow.Window do
       [{1, 8, 120}, {1, 10, 400}, {2, 6, 140}]
   """
 
-  @type t :: %{required(:trigger) => {fun(), fun()} | nil,
-               required(:periodically) => []}
+  @type t :: %{required(:trigger) => {fun(), fun()} | nil, required(:periodically) => []}
 
   @typedoc "The supported window types."
   @type type :: :global | :fixed | :session | :periodic | :count | any()
@@ -365,7 +364,7 @@ defmodule Flow.Window do
 
   See the section on "Periodic windows" in the module documentation for examples.
   """
-  @spec periodic(pos_integer, System.time_unit) :: t
+  @spec periodic(pos_integer, System.time_unit()) :: t
   def periodic(count, unit) when is_integer(count) and count > 0 do
     %Flow.Window.Periodic{duration: to_ms(count, unit)}
   end
@@ -388,7 +387,7 @@ defmodule Flow.Window do
 
   See the section on "Fixed windows" in the module documentation for examples.
   """
-  @spec fixed(pos_integer, System.time_unit, (t -> pos_integer)) :: t
+  @spec fixed(pos_integer, System.time_unit(), (t -> pos_integer)) :: t
   def fixed(count, unit, by) when is_integer(count) and count > 0 and is_function(by, 1) do
     %Flow.Window.Fixed{duration: to_ms(count, unit), by: by}
   end
@@ -407,7 +406,7 @@ defmodule Flow.Window do
 
   See the section on "Session windows" in the module documentation for examples.
   """
-  @spec session(pos_integer, System.time_unit, (t -> pos_integer)) :: t
+  @spec session(pos_integer, System.time_unit(), (t -> pos_integer)) :: t
   def session(count, unit, by) when is_integer(count) and count > 0 and is_function(by, 1) do
     %Flow.Window.Session{gap: to_ms(count, unit), by: by}
   end
@@ -426,14 +425,15 @@ defmodule Flow.Window do
   `count` is a positive number. The `unit` may be a time unit
   (`:second`, `:millisecond`, `:second`, `:minute` and `:hour`).
   """
-  @spec allowed_lateness(t, pos_integer, System.time_unit, :keep | :reset) :: t
+  @spec allowed_lateness(t, pos_integer, System.time_unit(), :keep | :reset) :: t
   def allowed_lateness(window, count, unit, keep_or_reset \\ :keep)
 
   def allowed_lateness(%{lateness: _} = window, count, unit, keep_or_reset) do
     %{window | lateness: {to_ms(count, unit), keep_or_reset}}
   end
+
   def allowed_lateness(window, _, _, _) do
-    raise ArgumentError, "allowed_lateness/4 not supported for window type #{inspect window}"
+    raise ArgumentError, "allowed_lateness/4 not supported for window type #{inspect(window)}"
   end
 
   @doc """
@@ -465,18 +465,27 @@ defmodule Flow.Window do
   We recommend looking at the implementation of `trigger_every/3` as
   an example of a custom trigger.
   """
-  @spec trigger(t, (() -> acc), ([event], acc -> cont_tuple |
-                                                 cont_tuple_with_emitted_events |
-                                                 trigger_tuple)) :: t
+  @spec trigger(
+          t,
+          (() -> acc),
+          ([event], acc ->
+             cont_tuple
+             | cont_tuple_with_emitted_events
+             | trigger_tuple)
+        ) :: t
         when cont_tuple: {:cont, acc},
              cont_tuple_with_emitted_events: {:cont, [event], acc},
              trigger_tuple: {:trigger, trigger(), pre, accumulator(), pos, acc},
-             pre: [event], pos: [event], acc: term(), event: term()
+             pre: [event],
+             pos: [event],
+             acc: term(),
+             event: term()
   def trigger(window, acc_fun, trigger_fun) do
     if is_function(acc_fun, 0) do
       add_trigger(window, {acc_fun, trigger_fun})
     else
-      raise ArgumentError, "Flow.Window.trigger/3 expects the accumulator to be given as a function"
+      raise ArgumentError,
+            "Flow.Window.trigger/3 expects the accumulator to be given as a function"
     end
   end
 
@@ -516,6 +525,7 @@ defmodule Flow.Window do
 
     trigger(window, fn -> count end, fn events, acc ->
       length = length(events)
+
       if length(events) >= acc do
         {pre, pos} = Enum.split(events, acc)
         {:trigger, name, pre, keep_or_reset, pos, count}
@@ -556,25 +566,35 @@ defmodule Flow.Window do
   Similar to periodic triggers, message-based triggers will also be
   invoked to all windows that have changed since the last trigger.
   """
-  @spec trigger_periodically(t, pos_integer, System.time_unit, :keep | :reset) :: t
-  def trigger_periodically(%{periodically: periodically} = window,
-                           count, unit, keep_or_reset \\ :keep)
+  @spec trigger_periodically(t, pos_integer, System.time_unit(), :keep | :reset) :: t
+  def trigger_periodically(
+        %{periodically: periodically} = window,
+        count,
+        unit,
+        keep_or_reset \\ :keep
+      )
       when is_integer(count) and count > 0 do
-    periodically = [{to_ms(count, unit), keep_or_reset, {:periodically, count, unit}} | periodically]
-    %{window | periodically: periodically}
+    trigger = {to_ms(count, unit), keep_or_reset, {:periodically, count, unit}}
+    %{window | periodically: [trigger | periodically]}
   end
 
   defp to_ms(count, :millisecond), do: count
   defp to_ms(count, :second), do: count * 1000
   defp to_ms(count, :minute), do: count * 1000 * 60
   defp to_ms(count, :hour), do: count * 1000 * 60 * 60
-  defp to_ms(_count, unit), do: raise ArgumentError, "unknown unit #{inspect unit} (expected :millisecond, :second, :minute or :hour)"
+
+  defp to_ms(_count, unit) do
+    raise ArgumentError,
+          "unknown unit #{inspect(unit)} (expected :millisecond, :second, :minute or :hour)"
+  end
 
   defp add_trigger(%{trigger: nil} = window, trigger) do
     %{window | trigger: trigger}
   end
+
   defp add_trigger(%{}, _trigger) do
-    raise ArgumentError, "Flow.Window.trigger/3 or Flow.Window.trigger_every/3 " <>
-                         "can only be called once per window"
+    raise ArgumentError,
+          "Flow.Window.trigger/3 or Flow.Window.trigger_every/3 " <>
+            "can only be called once per window"
   end
 end

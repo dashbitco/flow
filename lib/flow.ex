@@ -404,22 +404,28 @@ defmodule Flow do
   """
 
   defstruct producers: nil, window: nil, options: [], operations: []
-  @type t :: %Flow{producers: producers, operations: [operation],
-                   options: keyword(), window: Flow.Window.t}
 
-  @typep producers :: nil |
-                      {:stages, GenStage.stage | [GenStage.stage]} |
-                      {:enumerables, Enumerable.t} |
-                      {:join, t, t, fun(), fun(), fun()} |
-                      {:departition, t, fun(), fun(), fun()} |
-                      {:flows, [t]}
+  @type t :: %Flow{
+          producers: producers,
+          operations: [operation],
+          options: keyword(),
+          window: Flow.Window.t()
+        }
 
-  @typep operation :: {:mapper, atom(), [term()]} |
-                      {:partition, keyword()} |
-                      {:map_state, fun()} |
-                      {:reduce, fun(), fun()} |
-                      {:uniq, fun()}
+  @typep producers ::
+           nil
+           | {:stages, GenStage.stage() | [GenStage.stage()]}
+           | {:enumerables, Enumerable.t()}
+           | {:join, t, t, fun(), fun(), fun()}
+           | {:departition, t, fun(), fun(), fun()}
+           | {:flows, [t]}
 
+  @typep operation ::
+           {:mapper, atom(), [term()]}
+           | {:partition, keyword()}
+           | {:map_state, fun()}
+           | {:reduce, fun(), fun()}
+           | {:uniq, fun()}
 
   ## Building
 
@@ -454,12 +460,13 @@ defmodule Flow do
       |> Flow.from_enumerable(max_demand: 20)
 
   """
-  @spec from_enumerable(Enumerable.t, keyword) :: t
+  @spec from_enumerable(Enumerable.t(), keyword) :: t
   def from_enumerable(enumerable, options \\ [])
 
   def from_enumerable(%Flow{}, _options) do
-    raise ArgumentError, "passing a Flow to Flow.from_enumerable/2 is not supported. " <>
-                         "Did you mean to use Flow.partition/2 or Flow.merge/2?"
+    raise ArgumentError,
+          "passing a Flow to Flow.from_enumerable/2 is not supported. " <>
+            "Did you mean to use Flow.partition/2 or Flow.merge/2?"
   end
 
   def from_enumerable(enumerable, options) do
@@ -499,16 +506,18 @@ defmodule Flow do
                File.stream!("some/file3", read_ahead: 100_000)]
       Flow.from_enumerables(files)
   """
-  @spec from_enumerables([Enumerable.t], keyword) :: t
+  @spec from_enumerables([Enumerable.t()], keyword) :: t
   def from_enumerables(enumerables, options \\ [])
 
   def from_enumerables([_ | _] = enumerables, options) do
     options = stages(options)
-    {window, options} = Keyword.pop(options, :window, Flow.Window.global)
+    {window, options} = Keyword.pop(options, :window, Flow.Window.global())
     %Flow{producers: {:enumerables, enumerables}, options: options, window: window}
   end
+
   def from_enumerables(enumerables, _options) do
-    raise ArgumentError, "from_enumerables/2 expects a non-empty list as argument, got: #{inspect enumerables}"
+    raise ArgumentError,
+          "from_enumerables/2 expects a non-empty list as argument, got: #{inspect(enumerables)}"
   end
 
   @doc """
@@ -525,7 +534,7 @@ defmodule Flow do
       Flow.from_stage(MyStage)
 
   """
-  @spec from_stage(GenStage.stage, keyword) :: t
+  @spec from_stage(GenStage.stage(), keyword) :: t
   def from_stage(stage, options \\ []) do
     from_stages([stage], options)
   end
@@ -569,16 +578,18 @@ defmodule Flow do
   will terminate, causing the next layer of stages in the flow to terminate
   and so forth, until the whole flow shuts down.
   """
-  @spec from_stages([GenStage.stage], keyword) :: t
+  @spec from_stages([GenStage.stage()], keyword) :: t
   def from_stages(stages, options \\ [])
 
   def from_stages([_ | _] = stages, options) do
     options = stages(options)
-    {window, options} = Keyword.pop(options, :window, Flow.Window.global)
+    {window, options} = Keyword.pop(options, :window, Flow.Window.global())
     %Flow{producers: {:stages, stages}, options: options, window: window}
   end
+
   def from_stages(stages, _options) do
-    raise ArgumentError, "from_stages/2 expects a non-empty list as argument, got: #{inspect stages}"
+    raise ArgumentError,
+          "from_stages/2 expects a non-empty list as argument, got: #{inspect(stages)}"
   end
 
   @joins [:inner, :left_outer, :right_outer, :full_outer]
@@ -633,13 +644,27 @@ defmodule Flow do
        %{id: 1, title: "hello", comment: "outstanding"}]
 
   """
-  @spec bounded_join(:inner | :left_outer | :right_outer | :outer, t, t,
-                     fun(), fun(), fun(), keyword()) :: t
-  def bounded_join(mode, %Flow{} = left, %Flow{} = right,
-                   left_key, right_key, join, options \\ [])
-      when is_function(left_key, 1) and is_function(right_key, 1) and
-           is_function(join, 2) and mode in @joins do
-    window_join(mode, left, right, Flow.Window.global, left_key, right_key, join, options)
+  @spec bounded_join(
+          :inner | :left_outer | :right_outer | :outer,
+          t,
+          t,
+          fun(),
+          fun(),
+          fun(),
+          keyword()
+        ) :: t
+  def bounded_join(
+        mode,
+        %Flow{} = left,
+        %Flow{} = right,
+        left_key,
+        right_key,
+        join,
+        options \\ []
+      )
+      when is_function(left_key, 1) and is_function(right_key, 1) and is_function(join, 2) and
+             mode in @joins do
+    window_join(mode, left, right, Flow.Window.global(), left_key, right_key, join, options)
   end
 
   @doc """
@@ -679,15 +704,35 @@ defmodule Flow do
        %{id: 2, title: "world", comment: "great follow up", timestamp: 1000}]
 
   """
-  @spec window_join(:inner | :left_outer | :right_outer | :outer, t, t, Flow.Window.t,
-                    fun(), fun(), fun(), keyword()) :: t
-  def window_join(mode, %Flow{} = left, %Flow{} = right, %{} = window,
-                  left_key, right_key, join, options \\ [])
-      when is_function(left_key, 1) and is_function(right_key, 1) and
-           is_function(join, 2) and mode in @joins do
+  @spec window_join(
+          :inner | :left_outer | :right_outer | :outer,
+          t,
+          t,
+          Flow.Window.t(),
+          fun(),
+          fun(),
+          fun(),
+          keyword()
+        ) :: t
+  def window_join(
+        mode,
+        %Flow{} = left,
+        %Flow{} = right,
+        %{} = window,
+        left_key,
+        right_key,
+        join,
+        options \\ []
+      )
+      when is_function(left_key, 1) and is_function(right_key, 1) and is_function(join, 2) and
+             mode in @joins do
     options = stages(options)
-    %Flow{producers: {:join, mode, left, right, left_key, right_key, join},
-          options: options, window: window}
+
+    %Flow{
+      producers: {:join, mode, left, right, left_key, right_key, join},
+      options: options,
+      window: window
+    }
   end
 
   @doc """
@@ -735,7 +780,7 @@ defmodule Flow do
   The flow exits with reason `:normal` only if all consumers exit with
   reason `:normal`. Otherwise exits with reason `:shutdown`.
   """
-  @spec start_link(t, keyword()) :: GenServer.on_start
+  @spec start_link(t, keyword()) :: GenServer.on_start()
   def start_link(flow, options \\ []) do
     Flow.Coordinator.start_link(emit(flow, :nothing), :consumer, [], options)
   end
@@ -766,8 +811,8 @@ defmodule Flow do
 
   This function receives the same options as `start_link/2`.
   """
-  @spec into_stages(t, consumers, keyword()) :: GenServer.on_start when
-        consumers: [GenStage.stage | {GenStage.stage, keyword()}]
+  @spec into_stages(t, consumers, keyword()) :: GenServer.on_start()
+        when consumers: [GenStage.stage() | {GenStage.stage(), keyword()}]
   def into_stages(flow, consumers, options \\ []) do
     Flow.Coordinator.start_link(flow, :producer_consumer, consumers, options)
   end
@@ -870,7 +915,7 @@ defmodule Flow do
       [1, 2, 2, 3, 4, 6]
 
   """
-  @spec flat_map(t, (term -> Enumerable.t)) :: t
+  @spec flat_map(t, (term -> Enumerable.t())) :: t
   def flat_map(flow, flat_mapper) when is_function(flat_mapper, 1) do
     add_operation(flow, {:mapper, :flat_map, [flat_mapper]})
   end
@@ -1005,7 +1050,7 @@ defmodule Flow do
   """
   def departition(%Flow{} = flow, acc_fun, merge_fun, done_fun, options \\ [])
       when is_function(acc_fun, 0) and is_function(merge_fun, 2) and
-           (is_function(done_fun, 1) or is_function(done_fun, 2)) do
+             (is_function(done_fun, 1) or is_function(done_fun, 2)) do
     unless has_reduce?(flow) do
       raise ArgumentError, "departition/5 must be called after a group_by/reduce operation"
     end
@@ -1017,18 +1062,22 @@ defmodule Flow do
         done_fun
       end
 
-    flow = map_state(flow, fn state, {partition, _}, trigger ->
-      [{state, partition, trigger}]
-    end)
+    flow =
+      map_state(flow, fn state, {partition, _}, trigger ->
+        [{state, partition, trigger}]
+      end)
 
     {window, options} =
       options
       |> Keyword.put(:dispatcher, GenStage.DemandDispatcher)
       |> Keyword.put(:stages, 1)
-      |> Keyword.pop(:window, Flow.Window.global)
+      |> Keyword.pop(:window, Flow.Window.global())
 
-    %Flow{producers: {:departition, flow, acc_fun, merge_fun, done_fun},
-          options: options, window: window}
+    %Flow{
+      producers: {:departition, flow, acc_fun, merge_fun, done_fun},
+      options: options,
+      window: window
+    }
   end
 
   @doc """
@@ -1057,17 +1106,21 @@ defmodule Flow do
 
   def merge([%Flow{} | _] = flows, options) when is_list(options) do
     options = stages(options)
-    {window, options} = Keyword.pop(options, :window, Flow.Window.global)
+    {window, options} = Keyword.pop(options, :window, Flow.Window.global())
     %Flow{producers: {:flows, flows}, options: options, window: window}
   end
+
   def merge(other, options) when is_list(options) do
-    raise ArgumentError, "Flow.merge/2 expects a non-empty list of flows as first argument, got: #{inspect other}"
+    raise ArgumentError,
+          "Flow.merge/2 expects a non-empty list of flows as first argument, " <>
+            "got: #{inspect(other)}"
   end
 
   defp stages(options) do
     case Keyword.fetch(options, :stages) do
       {:ok, _} ->
         options
+
       :error ->
         stages = System.schedulers_online()
         [stages: stages] ++ options
@@ -1107,10 +1160,13 @@ defmodule Flow do
   def reduce(flow, acc_fun, reducer_fun) when is_function(reducer_fun, 2) do
     cond do
       has_reduce?(flow) ->
-        raise ArgumentError, "cannot call group_by/reduce on a flow after another group_by/reduce operation " <>
-                             "(it must be called only once per partition, consider using map_state/2 instead)"
+        raise ArgumentError,
+              "cannot call group_by/reduce on a flow after another group_by/reduce operation " <>
+                "(it must be called only once per partition, consider using map_state/2 instead)"
+
       is_function(acc_fun, 0) ->
         add_operation(flow, {:reduce, acc_fun, reducer_fun})
+
       true ->
         raise ArgumentError, "Flow.reduce/3 expects the accumulator to be given as a function"
     end
@@ -1154,7 +1210,7 @@ defmodule Flow do
     end
 
     flow
-    |> map_state(& &1 |> Enum.sort(sort_fun) |> Enum.take(n))
+    |> map_state(&(&1 |> Enum.sort(sort_fun) |> Enum.take(n)))
     |> departition(fn -> [] end, &merge_sorted(&1, &2, n, sort_fun), fn x -> x end)
   end
 
@@ -1170,6 +1226,7 @@ defmodule Flow do
     case sort.(left, right) do
       true ->
         [left | merge_sorted(lefties, [right | righties], count + 1, n, sort)]
+
       false ->
         [right | merge_sorted([left | lefties], righties, count + 1, n, sort)]
     end
@@ -1295,24 +1352,28 @@ defmodule Flow do
   or `map_state/2` or even the processed collection as a whole. The
   argument value of `:nothing` is used by `run/1` and `start_link/2`.
   """
-  @spec emit(t, :events | :state | :nothing) :: t | Enumerable.t
+  @spec emit(t, :events | :state | :nothing) :: t | Enumerable.t()
   def emit(flow, :events) do
     flow
   end
+
   def emit(flow, :state) do
     unless has_reduce?(flow) do
       raise ArgumentError, "emit/2 must be called after a group_by/reduce operation"
     end
+
     map_state(flow, fn acc, _, _ -> [acc] end)
   end
+
   def emit(%{operations: operations} = flow, :nothing) do
     case inject_to_nothing(operations) do
       :map_state -> map_state(flow, fn _, _, _ -> [] end)
       :reduce -> reduce(flow, fn -> [] end, fn _, acc -> acc end)
     end
   end
+
   def emit(_, emit) do
-    raise ArgumentError, "unknown option for emit: #{inspect emit}"
+    raise ArgumentError, "unknown option for emit: #{inspect(emit)}"
   end
 
   defp inject_to_nothing([{:reduce, _, _} | _]), do: :map_state
@@ -1379,22 +1440,29 @@ defmodule Flow do
       16
 
   """
-  @spec map_state(t, (term -> term) |
-                     (term, term -> term) |
-                     (term, term, {Flow.Window.type, Flow.Window.id, Flow.Window.trigger} -> term)) :: t
+  @spec map_state(
+          t,
+          (term -> term)
+          | (term, term -> term)
+          | (term, term, {Flow.Window.type(), Flow.Window.id(), Flow.Window.trigger()} -> term)
+        ) :: t
   def map_state(flow, mapper) when is_function(mapper, 3) do
     do_map_state(flow, mapper)
   end
+
   def map_state(flow, mapper) when is_function(mapper, 2) do
     do_map_state(flow, fn acc, index, _ -> mapper.(acc, index) end)
   end
+
   def map_state(flow, mapper) when is_function(mapper, 1) do
     do_map_state(flow, fn acc, _, _ -> mapper.(acc) end)
   end
+
   defp do_map_state(flow, mapper) do
     unless has_reduce?(flow) do
       raise ArgumentError, "map_state/2 must be called after a group_by/reduce operation"
     end
+
     add_operation(flow, {:map_state, mapper})
   end
 
@@ -1421,41 +1489,59 @@ defmodule Flow do
       :ok
 
   """
-  @spec each_state(t, (term -> term) |
-                      (term, term -> term) |
-                      (term, term, {Flow.Window.type, Flow.Window.id, Flow.Window.trigger} -> term)) :: t
+  @spec each_state(
+          t,
+          (term -> term)
+          | (term, term -> term)
+          | (term, term, {Flow.Window.type(), Flow.Window.id(), Flow.Window.trigger()} -> term)
+        ) :: t
   def each_state(flow, mapper) when is_function(mapper, 3) do
-    do_each_state(flow, fn acc, index, trigger -> mapper.(acc, index, trigger); acc end)
+    do_each_state(flow, fn acc, index, trigger ->
+      mapper.(acc, index, trigger)
+      acc
+    end)
   end
+
   def each_state(flow, mapper) when is_function(mapper, 2) do
-    do_each_state(flow, fn acc, index, _ -> mapper.(acc, index); acc end)
+    do_each_state(flow, fn acc, index, _ ->
+      mapper.(acc, index)
+      acc
+    end)
   end
+
   def each_state(flow, mapper) when is_function(mapper, 1) do
-    do_each_state(flow, fn acc, _, _ -> mapper.(acc); acc end)
+    do_each_state(flow, fn acc, _, _ ->
+      mapper.(acc)
+      acc
+    end)
   end
+
   defp do_each_state(flow, mapper) do
     unless has_reduce?(flow) do
       raise ArgumentError, "each_state/2 must be called after a group_by/reduce operation"
     end
+
     add_operation(flow, {:map_state, mapper})
   end
 
   defp add_operation(%Flow{operations: operations} = flow, operation) do
     %{flow | operations: [operation | operations]}
   end
+
   defp add_operation(flow, _producers) do
-    raise ArgumentError, "expected a flow as argument, got: #{inspect flow}"
+    raise ArgumentError, "expected a flow as argument, got: #{inspect(flow)}"
   end
 
   defp has_reduce?(%{operations: operations}) do
-    Enum.any?(operations, &match?({:reduce,_, _}, &1))
+    Enum.any?(operations, &match?({:reduce, _, _}, &1))
   end
 
   defimpl Enumerable do
     def reduce(flow, acc, fun) do
-      case Flow.Coordinator.start(flow, :producer_consumer, [], [demand: :accumulate]) do
+      case Flow.Coordinator.start(flow, :producer_consumer, [], demand: :accumulate) do
         {:ok, pid} ->
           Flow.Coordinator.stream(pid).(acc, fun)
+
         {:error, reason} ->
           exit({reason, {__MODULE__, :reduce, [flow, acc, fun]}})
       end

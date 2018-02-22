@@ -7,6 +7,9 @@ notifications:
     - jose.valim@plataformatec.com.br
 otp_release:
   - 18.0
+script:
+  - if [[ $(elixir --version) = *"1.6"* ]]; then mix format --check-formatted; fi
+  - mix test
 after_script:
   - mix deps.get --only docs
   - MIX_ENV=docs mix inch.report
