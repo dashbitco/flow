@@ -37,6 +37,7 @@ defmodule Flow.Coordinator do
         for consumer <- consumers do
           subscribe(consumer, pid, timeout)
         end
+
         Process.monitor(pid)
       end
 
@@ -74,6 +75,7 @@ defmodule Flow.Coordinator do
   defp subscribe({consumer, opts}, producer, timeout) when is_list(opts) do
     GenStage.sync_subscribe(consumer, [to: producer, cancel: :transient] ++ opts, timeout)
   end
+
   defp subscribe(consumer, producer, timeout) do
     GenStage.sync_subscribe(consumer, [to: producer, cancel: :transient], timeout)
   end
@@ -87,16 +89,18 @@ defmodule Flow.Coordinator do
     {:noreply, state}
   end
 
-  def handle_info({:"$gen_producer", {consumer, ref}, {:subscribe, _, opts}}, %{intermediary: intermediary} = state) do
-    for {pid, _} <- intermediary do
+  def handle_info({:"$gen_producer", {consumer, ref}, {:subscribe, _, opts}}, state) do
+    for {pid, _} <- state.intermediary do
       GenStage.async_subscribe(consumer, [to: pid] ++ opts)
     end
+
     send(consumer, {:"$gen_consumer", {self(), ref}, {:cancel, :normal}})
     {:noreply, state}
   end
+
   # Since consumers can send demand right after subscription,
   # we may still receive ask messages, which we promptly ignore.
-  def handle_info({:"$gen_producer", _from,  {:ask, _}}, state) do
+  def handle_info({:"$gen_producer", _from, {:ask, _}}, state) do
     {:noreply, state}
   end
 
@@ -122,6 +126,7 @@ defmodule Flow.Coordinator do
       {:noreply, state}
     end
   end
+
   def handle_info(_, state) do
     {:noreply, state}
   end
@@ -129,6 +134,7 @@ defmodule Flow.Coordinator do
   def terminate(_reason, %{supervisor: supervisor}) do
     ref = Process.monitor(supervisor)
     Process.exit(supervisor, :shutdown)
+
     receive do
       {:DOWN, ^ref, _, _, _} -> :ok
     end

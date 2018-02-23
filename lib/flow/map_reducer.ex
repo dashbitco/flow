@@ -18,6 +18,7 @@ defmodule Flow.MapReducer do
       {:automatic, state}
     end
   end
+
   def handle_subscribe(:consumer, _, _, state) do
     {:automatic, state}
   end
@@ -28,6 +29,7 @@ defmodule Flow.MapReducer do
         Process.delete(ref)
         {events, acc, status} = done_status(status, index, acc, ref)
         {:noreply, events, {Map.delete(producers, ref), status, index, acc, reducer}}
+
       true ->
         {:noreply, [], {producers, status, index, acc, reducer}}
     end
@@ -38,17 +40,21 @@ defmodule Flow.MapReducer do
     {events, acc} = trigger.(acc, index, keep_or_reset, name)
     {:noreply, events, {producers, status, index, acc, reducer}}
   end
+
   def handle_info(:stop, state) do
     {:stop, :normal, state}
   end
+
   def handle_info(_msg, state) do
     {:noreply, [], state}
   end
 
-  def handle_events(events, {_, ref}, {producers, status, index, acc, reducer}) when is_function(reducer, 4) do
+  def handle_events(events, {_, ref}, {producers, status, index, acc, reducer})
+      when is_function(reducer, 4) do
     {events, acc} = reducer.(ref, events, acc, index)
     {:noreply, events, {producers, status, index, acc, reducer}}
   end
+
   def handle_events(events, {_, ref}, {producers, status, index, acc, reducer}) do
     {producers, events, acc} = reducer.(producers, ref, events, acc, index)
     {:noreply, events, {producers, status, index, acc, reducer}}
@@ -67,13 +73,16 @@ defmodule Flow.MapReducer do
   defp done_status(%{producers: map, done?: true} = status, _index, acc, _ref) when map == %{} do
     {[], acc, status}
   end
-  defp done_status(%{done?: false, trigger: trigger, producers: producers} = status,
-                   index, acc, ref) do
+
+  defp done_status(%{done?: false} = status, index, acc, ref) do
+    %{trigger: trigger, producers: producers} = status
+
     case Map.delete(producers, ref) do
       new_producers when new_producers == %{} and producers != %{} ->
         {events, acc} = trigger.(acc, index, :keep, :done)
         GenStage.async_info(self(), :stop)
         {events, acc, %{status | producers: %{}, done?: true}}
+
       producers ->
         {[], acc, %{status | producers: producers}}
     end

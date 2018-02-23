@@ -20,10 +20,9 @@ defmodule Flow.Window.Global do
         end
       end
 
-    trigger =
-      fn acc, index, op, name ->
-        reducer_trigger.(acc, index, op, {:global, :global, name})
-      end
+    trigger = fn acc, index, op, name ->
+      reducer_trigger.(acc, index, op, {:global, :global, name})
+    end
 
     {acc, fun, trigger}
   end
