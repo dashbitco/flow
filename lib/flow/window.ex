@@ -465,15 +465,10 @@ defmodule Flow.Window do
   We recommend looking at the implementation of `trigger_every/3` as
   an example of a custom trigger.
   """
-  @spec trigger(
-          t,
-          (() -> acc),
-          ([event], acc ->
-             cont_tuple
-             | cont_tuple_with_emitted_events
-             | trigger_tuple)
-        ) :: t
-        when cont_tuple: {:cont, acc},
+  @spec trigger(t, (() -> acc), trigger_fun) :: t
+        when trigger_fun: ([event], acc -> trigger_fun_return),
+             trigger_fun_return: cont_tuple | cont_tuple_with_emitted_events | trigger_tuple,
+             cont_tuple: {:cont, acc},
              cont_tuple_with_emitted_events: {:cont, [event], acc},
              trigger_tuple: {:trigger, trigger(), pre, accumulator(), pos, acc},
              pre: [event],

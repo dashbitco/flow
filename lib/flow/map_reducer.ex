@@ -74,12 +74,9 @@ defmodule Flow.MapReducer do
     {[], acc, status}
   end
 
-  defp done_status(
-         %{done?: false, trigger: trigger, producers: producers} = status,
-         index,
-         acc,
-         ref
-       ) do
+  defp done_status(%{done?: false} = status, index, acc, ref) do
+    %{trigger: trigger, producers: producers} = status
+
     case Map.delete(producers, ref) do
       new_producers when new_producers == %{} and producers != %{} ->
         {events, acc} = trigger.(acc, index, :keep, :done)

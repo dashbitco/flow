@@ -5,18 +5,14 @@ defmodule Flow.Materialize do
   @map_reducer_opts [:buffer_keep, :buffer_size, :dispatcher]
   @supervisor_opts [:shutdown]
 
-  def materialize(%{producers: nil}, _, _, _) do
+  def materialize(%Flow{producers: nil}, _, _, _) do
     raise ArgumentError,
           "cannot execute a flow without producers, " <>
             "please call \"from_enumerable\" or \"from_stage\" accordingly"
   end
 
-  def materialize(
-        %{operations: operations, options: options, producers: producers, window: window},
-        start_link,
-        type,
-        type_options
-      ) do
+  def materialize(%Flow{} = flow, start_link, type, type_options) do
+    %{operations: operations, options: options, producers: producers, window: window} = flow
     options = Keyword.merge(type_options, options)
     ops = split_operations(operations)
 
