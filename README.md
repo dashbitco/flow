@@ -2,7 +2,7 @@
 
 `Flow` allows developers to express computations on collections, similar to the `Enum` and `Stream` modules, although computations will be executed in parallel using multiple `GenStage`s.
 
-Here is a quick and example on how to count words in a document in parallel with Flow:
+Here is a quick example on how to count words in a document in parallel with Flow:
 
 ```elixir
 File.stream!("path/to/some/file")
