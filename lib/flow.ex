@@ -940,10 +940,19 @@ defmodule Flow do
   @doc """
   Creates a new partition for the given flow with the given options
 
-  Every time this function is called, a new partition
-  is created. It is typically recommended to invoke it
-  before a reducing function, such as `reduce/3`, so data
-  belonging to the same partition can be kept together.
+  Every time this function is called, a new partition is created.
+  It is typically recommended to invoke it before a reducing function,
+  such as `reduce/3`, so data belonging to the same partition can be
+  kept together.
+
+  However, notice that unnecessary partitioning will increase memory
+  usage and reduce throughput with no benefit whatsoever. Flow takes
+  care of using all cores regardless of the number of times you call
+  partition. You should only partition when the problem you are trying
+  to solve requires you to route the data around. Such as the problem
+  presented in `Flow`'s module documentation. If you can solve a problem
+  without using partition at all, that is typically preferred. Those
+  are typically called "embarrassingly parallel" problems.
 
   ## Examples
 
