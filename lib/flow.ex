@@ -1193,7 +1193,7 @@ defmodule Flow do
   final result is a flow with a single partition that will emit a list
   with the top `n` events. The sorting is given by the `sort_fun`.
 
-  `take_sort/3` is built on top of departition, which means it will
+  `take_sort/3` is built on top of `departition/5`, which means it will
   also take and sort entries across windows.
 
   ## Examples
