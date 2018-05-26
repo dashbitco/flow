@@ -19,6 +19,13 @@ defmodule Flow.Window.Fixed do
     acc = fn -> {nil, %{}} end
     lateness_fun = lateness_fun(lateness, duration, ref, reducer_acc, reducer_trigger)
 
+    static = %{
+      by: by,
+      duration: duration,
+      reducer_acc: reducer_acc,
+      reducer_fun: reducer_fun
+    }
+
     # The reducing function works in three stages.
     #
     # 1. We start processing all events, grouping all events that belong
@@ -34,20 +41,7 @@ defmodule Flow.Window.Fixed do
     #
     fun = fn producers, ref, events, {all, windows}, index ->
       {reducer_emit, recent, windows} =
-        split_events(
-          events,
-          ref,
-          [],
-          nil,
-          by,
-          duration,
-          Map.fetch!(producers, ref),
-          windows,
-          index,
-          reducer_acc,
-          reducer_fun,
-          []
-        )
+        split_events(events, ref, [], nil, Map.fetch!(producers, ref), windows, index, [], static)
 
       # Update the latest window for this producer
       producers = Map.put(producers, ref, recent)
@@ -67,139 +61,41 @@ defmodule Flow.Window.Fixed do
 
   ## Reducer
 
-  defp split_events(
-         [event | events],
-         ref,
-         buffer,
-         current,
-         by,
-         duration,
-         recent,
-         windows,
-         index,
-         reducer_acc,
-         reducer_fun,
-         emit
-       ) do
+  defp split_events([event | events], ref, buffer, current, recent, windows, index, emit, static) do
+    %{by: by, duration: duration} = static
     window = div(by!(by, event), duration)
 
     if is_nil(current) or window === current do
-      split_events(
-        events,
-        ref,
-        [event | buffer],
-        window,
-        by,
-        duration,
-        recent,
-        windows,
-        index,
-        reducer_acc,
-        reducer_fun,
-        emit
-      )
+      split_events(events, ref, [event | buffer], window, recent, windows, index, emit, static)
     else
       {emit, recent, windows} =
-        reduce_events(
-          ref,
-          buffer,
-          current,
-          duration,
-          recent,
-          windows,
-          index,
-          reducer_acc,
-          reducer_fun,
-          emit
-        )
+        reduce_events(ref, buffer, current, recent, windows, index, emit, static)
 
-      split_events(
-        events,
-        ref,
-        [event],
-        window,
-        by,
-        duration,
-        recent,
-        windows,
-        index,
-        reducer_acc,
-        reducer_fun,
-        emit
-      )
+      split_events(events, ref, [event], window, recent, windows, index, emit, static)
     end
   end
 
-  defp split_events(
-         [],
-         ref,
-         buffer,
-         window,
-         _by,
-         duration,
-         recent,
-         windows,
-         index,
-         reducer_acc,
-         reducer_fun,
-         emit
-       ) do
-    reduce_events(
-      ref,
-      buffer,
-      window,
-      duration,
-      recent,
-      windows,
-      index,
-      reducer_acc,
-      reducer_fun,
-      emit
-    )
+  defp split_events([], ref, buffer, window, recent, windows, index, emit, static) do
+    reduce_events(ref, buffer, window, recent, windows, index, emit, static)
   end
 
-  defp reduce_events(
-         _ref,
-         [],
-         _window,
-         _duration,
-         recent,
-         windows,
-         _index,
-         _reducer_acc,
-         _reducer_fun,
-         emit
-       ) do
+  defp reduce_events(_ref, [], _window, recent, windows, _index, emit, _static) do
     {emit, recent, windows}
   end
 
-  defp reduce_events(
-         ref,
-         buffer,
-         window,
-         duration,
-         recent,
-         windows,
-         index,
-         reducer_acc,
-         reducer_fun,
-         emit
-       ) do
+  defp reduce_events(ref, buffer, window, recent, windows, index, emit, static) do
     events = :lists.reverse(buffer)
 
-    case recent_window(window, recent, windows, reducer_acc) do
+    case recent_window(window, recent, windows, static) do
       {:ok, window_acc, recent} ->
+        reducer_fun = static.reducer_fun
+
         {new_emit, window_acc} =
           if is_function(reducer_fun, 4) do
             reducer_fun.(ref, events, window_acc, index)
           else
-            reducer_fun.(
-              ref,
-              events,
-              window_acc,
-              index,
-              {:fixed, window * duration, :placeholder}
-            )
+            trigger = {:fixed, window * static.duration, :placeholder}
+            reducer_fun.(ref, events, window_acc, index, trigger)
           end
 
         {emit ++ new_emit, recent, Map.put(windows, window, window_acc)}
@@ -209,17 +105,17 @@ defmodule Flow.Window.Fixed do
     end
   end
 
-  defp recent_window(window, nil, windows, reducer_acc) do
+  defp recent_window(window, nil, windows, static) do
     case windows do
       %{^window => acc} -> {:ok, acc, window}
-      %{} -> {:ok, reducer_acc.(), window}
+      %{} -> {:ok, static.reducer_acc.(), window}
     end
   end
 
-  defp recent_window(window, recent, windows, reducer_acc) do
+  defp recent_window(window, recent, windows, static) do
     case windows do
       %{^window => acc} -> {:ok, acc, max(window, recent)}
-      %{} when window >= recent -> {:ok, reducer_acc.(), window}
+      %{} when window >= recent -> {:ok, static.reducer_acc.(), window}
       %{} -> :error
     end
   end
