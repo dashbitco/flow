@@ -124,7 +124,6 @@ defmodule Flow.Materialize do
          window,
          options
        ) do
-    flow = flow.window.__struct__.departition(flow)
     {producers, consumers} = materialize(flow, start_link, :producer_consumer, options)
     {type, {acc, fun, trigger}, ops} = ensure_ops(ops)
 
@@ -276,17 +275,17 @@ defmodule Flow.Materialize do
     end
 
     trigger = fn
-      {acc, windows}, index, op, {_, _, :done} = name ->
+      {acc, windows}, index, {_, _, :done} = name ->
         done =
           for {window, {_partitions, acc}} <- :lists.sort(:maps.to_list(windows)) do
             done_fun.(acc, window)
           end
 
-        {events, _} = reducer_trigger.(acc, index, op, name)
+        {events, _} = reducer_trigger.(acc, index, name)
         {done ++ events, {reducer_acc.(), %{}}}
 
-      {acc, windows}, index, op, name ->
-        {events, acc} = reducer_trigger.(acc, index, op, name)
+      {acc, windows}, index, name ->
+        {events, acc} = reducer_trigger.(acc, index, name)
         {events, {acc, windows}}
     end
 
@@ -357,7 +356,7 @@ defmodule Flow.Materialize do
     ref = make_ref()
 
     trigger = fn
-      {left, right, acc}, index, op, {_, _, :done} = name ->
+      {left, right, acc}, index, {_, _, :done} = name ->
         {kind_events, acc} =
           case kind do
             :inner ->
@@ -382,11 +381,11 @@ defmodule Flow.Materialize do
               {left_events ++ right_events, acc}
           end
 
-        {trigger_events, acc} = trigger.(acc, index, op, name)
+        {trigger_events, acc} = trigger.(acc, index, name)
         {kind_events ++ trigger_events, {left, right, acc}}
 
-      {left, right, acc}, index, op, name ->
-        {events, acc} = trigger.(acc, index, op, name)
+      {left, right, acc}, index, name ->
+        {events, acc} = trigger.(acc, index, name)
         {events, {left, right, acc}}
     end
 
@@ -486,8 +485,8 @@ defmodule Flow.Materialize do
   end
 
   defp build_punctuated_trigger(trigger) do
-    fn {trigger_acc, red_acc}, index, op, name ->
-      {events, red_acc} = trigger.(red_acc, index, op, name)
+    fn {trigger_acc, red_acc}, index, name ->
+      {events, red_acc} = trigger.(red_acc, index, name)
       {events, {trigger_acc, red_acc}}
     end
   end
@@ -505,9 +504,9 @@ defmodule Flow.Materialize do
          collected
        ) do
     case punctuation_fun.(events, pun_acc) do
-      {:trigger, trigger_name, pre, op, pos, pun_acc} ->
+      {:trigger, trigger_name, pre, pos, pun_acc} ->
         {red_events, red_acc} = red_fun.(ref, pre, red_acc, index)
-        {trigger_events, red_acc} = trigger.(red_acc, index, op, put_elem(name, 2, trigger_name))
+        {trigger_events, red_acc} = trigger.(red_acc, index, put_elem(name, 2, trigger_name))
 
         maybe_punctuate(
           ref,
@@ -541,8 +540,8 @@ defmodule Flow.Materialize do
 
   defp window_periodically(window_acc, periodically) do
     fn ->
-      for {time, keep_or_reset, name} <- periodically do
-        {:ok, _} = :timer.send_interval(time, self(), {:trigger, keep_or_reset, name})
+      for {time, name} <- periodically do
+        {:ok, _} = :timer.send_interval(time, self(), {:trigger, name})
       end
 
       window_acc.()
@@ -553,8 +552,11 @@ defmodule Flow.Materialize do
 
   defp reducer_ops(ops) do
     case take_mappers(ops, []) do
+      {mappers, [{:emit_and_reduce, reducer_acc, reducer_fun} | ops]} ->
+        {reducer_acc, build_emit_and_reducer(mappers, reducer_fun), build_trigger(ops)}
+
       {mappers, [{:reduce, reducer_acc, reducer_fun} | ops]} ->
-        {reducer_acc, build_reducer(mappers, reducer_fun), build_trigger(ops, reducer_acc)}
+        {reducer_acc, build_reducer(mappers, reducer_fun), build_trigger(ops)}
 
       {mappers, [{:uniq, uniq_by} | ops]} ->
         {acc, reducer, trigger} = reducer_ops(ops)
@@ -563,7 +565,23 @@ defmodule Flow.Materialize do
         {fn -> {%{}, acc.()} end, uniq_reducer, uniq_trigger}
 
       {mappers, ops} ->
-        {fn -> [] end, build_reducer(mappers, &[&1 | &2]), build_trigger(ops, fn -> [] end)}
+        {fn -> [] end, build_reducer(mappers, &[&1 | &2]), build_trigger(ops)}
+    end
+  end
+
+  defp build_emit_and_reducer(mappers, fun) do
+    reducer = :lists.foldl(&mapper/2, fun, mappers)
+
+    emit_and_reducer = fn event, {events, acc} ->
+      case reducer.(event, acc) do
+        {[], acc} -> {events, acc}
+        {[_ | _] = current, acc} -> {[current | events], acc}
+      end
+    end
+
+    fn _ref, events, acc, _index ->
+      {events, acc} = :lists.foldl(emit_and_reducer, {[], acc}, events)
+      {events |> :lists.reverse() |> :lists.append(), acc}
     end
   end
 
@@ -575,35 +593,44 @@ defmodule Flow.Materialize do
     end
   end
 
-  @protocol_undefined "if you would like to emit a modified state from flow, like " <>
-                        "a counter or a custom data-structure, please call Flow.emit/2 accordingly"
+  @protocol_undefined "Flow attempted to convert the stage accumulator into events but failed, " <>
+                        "to explicit convert your current state into events use on_trigger/2"
 
-  defp build_trigger(ops, acc_fun) do
-    map_states = merge_map_state(ops)
+  defp build_trigger(ops) do
+    case take_mappers(ops, []) do
+      {[], [{:on_trigger, fun}]} ->
+        fun
 
-    fn acc, index, op, name ->
-      events = :lists.foldl(& &1.(&2, index, name), acc, map_states)
+      {mappers, [{:on_trigger, fun}]} ->
+        reducer = :lists.foldl(&mapper/2, &[&1 | &2], mappers)
 
-      try do
-        Enum.to_list(events)
-      rescue
-        e in Protocol.UndefinedError ->
-          msg = @protocol_undefined
+        fn acc, index, trigger ->
+          acc |> Enum.reduce([], reducer) |> Enum.reverse() |> fun.(index, trigger)
+        end
 
-          e =
-            update_in(e.description, fn
-              "" -> msg
-              dc -> dc <> " (#{msg})"
-            end)
+      {[], []} ->
+        fn acc, _, _ ->
+          try do
+            Enum.to_list(acc)
+          rescue
+            e in Protocol.UndefinedError ->
+              msg = @protocol_undefined
 
-          reraise e, System.stacktrace()
-      else
-        events ->
-          case op do
-            :keep -> {events, acc}
-            :reset -> {events, acc_fun.()}
+              e =
+                update_in(e.description, fn
+                  "" -> msg
+                  dc -> dc <> " (#{msg})"
+                end)
+
+              reraise e, System.stacktrace()
+          else
+            events -> {events, acc}
           end
-      end
+        end
+
+      {mappers, []} ->
+        reducer = :lists.foldl(&mapper/2, &[&1 | &2], mappers)
+        fn acc, _, _ -> {acc |> Enum.reduce([], reducer) |> Enum.reverse(), acc} end
     end
   end
 
@@ -629,26 +656,9 @@ defmodule Flow.Materialize do
   end
 
   defp build_uniq_trigger(trigger) do
-    fn {set, acc}, index, op, name ->
-      {events, acc} = trigger.(acc, index, op, name)
+    fn {set, acc}, index, name ->
+      {events, acc} = trigger.(acc, index, name)
       {events, {set, acc}}
-    end
-  end
-
-  defp merge_map_state(ops) do
-    case take_mappers(ops, []) do
-      {[], [{:map_state, fun} | ops]} ->
-        [fun | merge_map_state(ops)]
-
-      {[], [{:uniq, by} | ops]} ->
-        [fn acc, _, _ -> Enum.uniq_by(acc, by) end | merge_map_state(ops)]
-
-      {[], []} ->
-        []
-
-      {mappers, ops} ->
-        reducer = :lists.foldl(&mapper/2, &[&1 | &2], mappers)
-        [fn old_acc, _, _ -> Enum.reduce(old_acc, [], reducer) end | merge_map_state(ops)]
     end
   end
 
@@ -659,7 +669,7 @@ defmodule Flow.Materialize do
 
     {fn -> [] end,
      fn _ref, events, [], _index -> {:lists.reverse(:lists.foldl(reducer, [], events)), []} end,
-     fn _acc, _index, _op, _trigger -> {[], []} end}
+     fn _acc, _index, _trigger -> {[], []} end}
   end
 
   defp mapper({:mapper, :each, [each]}, fun) do

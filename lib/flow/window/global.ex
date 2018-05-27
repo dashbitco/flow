@@ -4,10 +4,6 @@ defmodule Flow.Window.Global do
   @enforce_keys []
   defstruct [:trigger, periodically: []]
 
-  def departition(flow) do
-    flow
-  end
-
   def materialize(_window, reducer_acc, reducer_fun, reducer_trigger, _options) do
     acc = reducer_acc
 
@@ -20,8 +16,8 @@ defmodule Flow.Window.Global do
         end
       end
 
-    trigger = fn acc, index, op, name ->
-      reducer_trigger.(acc, index, op, {:global, :global, name})
+    trigger = fn acc, index, name ->
+      reducer_trigger.(acc, index, {:global, :global, name})
     end
 
     {acc, fun, trigger}

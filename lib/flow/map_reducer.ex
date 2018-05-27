@@ -35,9 +35,9 @@ defmodule Flow.MapReducer do
     end
   end
 
-  def handle_info({:trigger, keep_or_reset, name}, {producers, status, index, acc, reducer}) do
+  def handle_info({:trigger, name}, {producers, status, index, acc, reducer}) do
     %{trigger: trigger} = status
-    {events, acc} = trigger.(acc, index, keep_or_reset, name)
+    {events, acc} = trigger.(acc, index, name)
     {:noreply, events, {producers, status, index, acc, reducer}}
   end
 
@@ -79,7 +79,7 @@ defmodule Flow.MapReducer do
 
     case Map.delete(producers, ref) do
       new_producers when new_producers == %{} and producers != %{} ->
-        {events, acc} = trigger.(acc, index, :keep, :done)
+        {events, acc} = trigger.(acc, index, :done)
         GenStage.async_info(self(), :stop)
         {events, acc, %{status | producers: %{}, done?: true}}
 

@@ -15,7 +15,7 @@ defmodule Flow.Window.FixedTest do
              |> Enum.sum() == 5050
     end
 
-    test "trigger keep with large demand" do
+    test "trigger with large demand" do
       partition_opts = [window: single_window() |> Flow.Window.trigger_every(10), stages: 1]
 
       assert Flow.from_enumerable(1..100)
@@ -25,7 +25,7 @@ defmodule Flow.Window.FixedTest do
              |> Enum.to_list() == [55, 210, 465, 820, 1275, 1830, 2485, 3240, 4095, 5050, 5050]
     end
 
-    test "trigger keep with small demand" do
+    test "trigger with small demand" do
       partition_opts = [
         window: single_window() |> Flow.Window.trigger_every(10),
         stages: 1,
@@ -37,33 +37,6 @@ defmodule Flow.Window.FixedTest do
              |> Flow.reduce(fn -> 0 end, &(&1 + &2))
              |> Flow.emit(:state)
              |> Enum.to_list() == [55, 210, 465, 820, 1275, 1830, 2485, 3240, 4095, 5050, 5050]
-    end
-
-    test "trigger discard with large demand" do
-      partition_opts = [
-        window: single_window() |> Flow.Window.trigger_every(10, :reset),
-        stages: 1
-      ]
-
-      assert Flow.from_enumerable(1..100)
-             |> Flow.partition(partition_opts)
-             |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-             |> Flow.emit(:state)
-             |> Enum.to_list() == [55, 155, 255, 355, 455, 555, 655, 755, 855, 955, 0]
-    end
-
-    test "trigger discard with small demand" do
-      partition_opts = [
-        window: single_window() |> Flow.Window.trigger_every(10, :reset),
-        stages: 1,
-        max_demand: 5
-      ]
-
-      assert Flow.from_enumerable(1..100)
-             |> Flow.partition(partition_opts)
-             |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-             |> Flow.emit(:state)
-             |> Enum.to_list() == [55, 155, 255, 355, 455, 555, 655, 755, 855, 955, 0]
     end
 
     test "trigger ordering" do
@@ -83,7 +56,7 @@ defmodule Flow.Window.FixedTest do
 
     test "trigger names" do
       partition_opts = [
-        window: single_window() |> Flow.Window.trigger_every(10, :reset),
+        window: single_window() |> Flow.Window.trigger_every(10),
         stages: 1
       ]
 
@@ -91,8 +64,7 @@ defmodule Flow.Window.FixedTest do
         Flow.from_enumerable(1..100)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:fixed, 0, trigger} -> {trigger, state} end)
-        |> Flow.emit(:state)
+        |> Flow.on_trigger(fn state, _, {:fixed, 0, trigger} -> {[{trigger, state}], 0} end)
         |> Enum.sort()
 
       assert result == [
@@ -121,14 +93,13 @@ defmodule Flow.Window.FixedTest do
              |> Flow.from_enumerable(max_demand: 5, stages: 2)
              |> Flow.partition(partition_opts)
              |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-             |> Flow.map_state(&(&1 * 2))
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[&1 * 2], &1})
              |> Enum.take(1) == [110]
     end
 
     test "trigger based on timers" do
       reduce_fun = fn ->
-        Process.send_after(self(), {:trigger, :reset, :sample}, 200)
+        Process.send_after(self(), {:trigger, :sample}, 200)
         0
       end
 
@@ -136,8 +107,7 @@ defmodule Flow.Window.FixedTest do
              |> Flow.from_enumerable(max_demand: 5, stages: 2)
              |> Flow.partition(stages: 1, max_demand: 10, window: single_window())
              |> Flow.reduce(reduce_fun, &(&1 + &2))
-             |> Flow.map_state(&{&1 * 2, &2, &3})
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[{&1 * 2, &2, &3}], reduce_fun.()})
              |> Enum.take(1) == [{110, {0, 1}, {:fixed, 0, :sample}}]
     end
   end
@@ -168,7 +138,9 @@ defmodule Flow.Window.FixedTest do
         Flow.from_enumerable(1..100, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:fixed, fixed, trigger} -> [{state, fixed, trigger}] end)
+        |> Flow.on_trigger(fn state, _, {:fixed, fixed, trigger} ->
+          {[{state, fixed, trigger}], state}
+        end)
         |> Enum.to_list()
 
       assert result == [
@@ -207,7 +179,9 @@ defmodule Flow.Window.FixedTest do
         Flow.from_enumerable(1..100, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:fixed, fixed, trigger} -> [{state, fixed, trigger}] end)
+        |> Flow.on_trigger(fn state, _, {:fixed, fixed, trigger} ->
+          {[{state, fixed, trigger}], state}
+        end)
         |> Enum.to_list()
 
       assert result == [
@@ -237,7 +211,9 @@ defmodule Flow.Window.FixedTest do
         |> Flow.from_enumerable(max_demand: 5, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:fixed, fixed, trigger} -> [{state, fixed, trigger}] end)
+        |> Flow.on_trigger(fn state, _, {:fixed, fixed, trigger} ->
+          {[{state, fixed, trigger}], state}
+        end)
         |> Enum.take(2)
 
       assert result == [
@@ -281,7 +257,9 @@ defmodule Flow.Window.FixedTest do
         Flow.from_enumerable(1..100, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:fixed, fixed, trigger} -> [{state, fixed, trigger}] end)
+        |> Flow.on_trigger(fn state, _, {:fixed, fixed, trigger} ->
+          {[{state, fixed, trigger}], state}
+        end)
         |> Enum.to_list()
 
       assert result == [
@@ -326,7 +304,9 @@ defmodule Flow.Window.FixedTest do
         Flow.from_enumerable(1..100, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:fixed, fixed, trigger} -> [{state, fixed, trigger}] end)
+        |> Flow.on_trigger(fn state, _, {:fixed, fixed, trigger} ->
+          {[{state, fixed, trigger}], state}
+        end)
         |> Enum.to_list()
 
       assert result == [
@@ -357,7 +337,9 @@ defmodule Flow.Window.FixedTest do
         |> Flow.from_enumerable(max_demand: 5, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:fixed, fixed, trigger} -> [{state, fixed, trigger}] end)
+        |> Flow.on_trigger(fn state, _, {:fixed, fixed, trigger} ->
+          {[{state, fixed, trigger}], state}
+        end)
         |> Enum.take(3)
 
       assert result == [
@@ -388,7 +370,9 @@ defmodule Flow.Window.FixedTest do
         Flow.from_enumerable(1..100, stages: 2)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:fixed, fixed, trigger} -> [{state, fixed, trigger}] end)
+        |> Flow.on_trigger(fn state, _, {:fixed, fixed, trigger} ->
+          {[{state, fixed, trigger}], state}
+        end)
         |> Enum.to_list()
 
       assert result == [
@@ -443,7 +427,9 @@ defmodule Flow.Window.FixedTest do
         |> Flow.map(& &1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:fixed, fixed, trigger} -> [{state, fixed, trigger}] end)
+        |> Flow.on_trigger(fn state, _, {:fixed, fixed, trigger} ->
+          {[{state, fixed, trigger}], state}
+        end)
         |> Enum.to_list()
 
       assert result == [
@@ -460,7 +446,7 @@ defmodule Flow.Window.FixedTest do
     end
   end
 
-  defp double_unordered_window_with_lateness(keep_or_reset \\ :keep) do
+  defp double_unordered_window_with_lateness() do
     Flow.Window.fixed(1, :second, fn
       x when x <= 40 ->
         0
@@ -472,25 +458,17 @@ defmodule Flow.Window.FixedTest do
       x when x <= 100 ->
         0
     end)
-    |> Flow.Window.allowed_lateness(1, :hour, keep_or_reset)
+    |> Flow.Window.allowed_lateness(1, :hour)
   end
 
   # With one stage, termination happens when one stage is done.
   describe "double unordered windows with lateness with one stage" do
-    test "reduces per window with large demand and keep buffer" do
+    test "reduces per window with large demand" do
       assert Flow.from_enumerable(1..100, stages: 1)
-             |> Flow.partition(window: double_unordered_window_with_lateness(:keep), stages: 1)
+             |> Flow.partition(window: double_unordered_window_with_lateness(), stages: 1)
              |> Flow.reduce(fn -> 0 end, &(&1 + &2))
              |> Flow.emit(:state)
              |> Enum.to_list() == [2630, 0, 2630, 0, 2420]
-    end
-
-    test "reduces per window with large demand and reset buffer" do
-      assert Flow.from_enumerable(1..100, stages: 1)
-             |> Flow.partition(window: double_unordered_window_with_lateness(:reset), stages: 1)
-             |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-             |> Flow.emit(:state)
-             |> Enum.to_list() == [2630, 0, 0, 0, 2420]
     end
 
     test "triggers per window with large demand" do
@@ -503,7 +481,9 @@ defmodule Flow.Window.FixedTest do
         Flow.from_enumerable(1..100, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:fixed, fixed, trigger} -> [{state, fixed, trigger}] end)
+        |> Flow.on_trigger(fn state, _, {:fixed, fixed, trigger} ->
+          {[{state, fixed, trigger}], state}
+        end)
         |> Enum.to_list()
 
       assert result == [
@@ -523,7 +503,7 @@ defmodule Flow.Window.FixedTest do
              ]
     end
 
-    test "reduces per window with small demand and keep buffer" do
+    test "reduces per window with small demand" do
       partition_opts = [
         window: double_unordered_window_with_lateness(),
         stages: 1,
@@ -538,21 +518,6 @@ defmodule Flow.Window.FixedTest do
              |> Enum.to_list() == [820, 0, 2630, 0, 2420]
     end
 
-    test "reduces per window with small demand and reset buffer" do
-      partition_opts = [
-        window: double_unordered_window_with_lateness(:reset),
-        stages: 1,
-        max_demand: 5,
-        min_demand: 0
-      ]
-
-      assert Flow.from_enumerable(1..100, stages: 1)
-             |> Flow.partition(partition_opts)
-             |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-             |> Flow.emit(:state)
-             |> Enum.to_list() == [820, 0, 1810, 0, 2420]
-    end
-
     test "triggers per window with small demand" do
       partition_opts = [
         window: double_unordered_window_with_lateness() |> Flow.Window.trigger_every(12),
@@ -565,7 +530,9 @@ defmodule Flow.Window.FixedTest do
         Flow.from_enumerable(1..100, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:fixed, fixed, trigger} -> [{state, fixed, trigger}] end)
+        |> Flow.on_trigger(fn state, _, {:fixed, fixed, trigger} ->
+          {[{state, fixed, trigger}], state}
+        end)
         |> Enum.to_list()
 
       assert result == [

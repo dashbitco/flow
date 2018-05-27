@@ -4,11 +4,6 @@ defmodule Flow.Window.Session do
   @enforce_keys [:by]
   defstruct [:by, :gap, :trigger, periodically: []]
 
-  def departition(_flow) do
-    raise ArgumentError,
-          "cannot departition on a session window because each session window has its own data"
-  end
-
   def materialize(%{by: by, gap: gap}, reducer_acc, reducer_fun, reducer_trigger, options) do
     key = key_to_fun(options[:key])
     acc = fn -> %{} end
@@ -18,8 +13,8 @@ defmodule Flow.Window.Session do
       dispatch(events, [], windows, gap, ref, index, reducer_acc, reducer_fun, reducer_trigger)
     end
 
-    trigger = fn windows, index, op, name ->
-      trigger(Map.to_list(windows), [], %{}, index, op, name, reducer_trigger)
+    trigger = fn windows, index, name ->
+      trigger(Map.to_list(windows), [], %{}, index, name, reducer_trigger)
     end
 
     {acc, fun, trigger}
@@ -94,7 +89,7 @@ defmodule Flow.Window.Session do
   defp get_window(windows, key, by, gap, index, reducer_acc, reducer_trigger) do
     case windows do
       %{^key => {first, last, acc}} when by - last > gap ->
-        {emit, _} = reducer_trigger.(acc, index, :keep, {:session, {key, first, last}, :done})
+        {emit, _} = reducer_trigger.(acc, index, {:session, {key, first, last}, :done})
         {emit, by, reducer_acc.()}
 
       %{^key => {first, _last, acc}} ->
@@ -122,21 +117,13 @@ defmodule Flow.Window.Session do
     {:lists.reverse(events), :lists.reverse(rest), last}
   end
 
-  defp trigger(
-         [{key, {first, last, acc}} | rest],
-         emit,
-         windows,
-         index,
-         op,
-         name,
-         reducer_trigger
-       ) do
-    {trigger_emit, acc} = reducer_trigger.(acc, index, op, {:session, {key, first, last}, name})
+  defp trigger([{key, {first, last, acc}} | rest], emit, windows, index, name, reducer_trigger) do
+    {trigger_emit, acc} = reducer_trigger.(acc, index, {:session, {key, first, last}, name})
     windows = Map.put(windows, key, {first, last, acc})
-    trigger(rest, emit ++ trigger_emit, windows, index, op, name, reducer_trigger)
+    trigger(rest, emit ++ trigger_emit, windows, index, name, reducer_trigger)
   end
 
-  defp trigger([], emit, windows, _index, _op, _name, _reducer_trigger) do
+  defp trigger([], emit, windows, _index, _name, _reducer_trigger) do
     {emit, windows}
   end
 end

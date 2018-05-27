@@ -33,7 +33,7 @@ defmodule FlowTest do
 
   describe "errors" do
     test "on multiple reduce calls" do
-      message = ~r"cannot call group_by/reduce on a flow after another group_by/reduce operation"
+      message = ~r"cannot call group_by/reduce/emit_and_reduce on a flow after another"
 
       assert_raise ArgumentError, message, fn ->
         Flow.from_enumerable([1, 2, 3])
@@ -43,12 +43,12 @@ defmodule FlowTest do
       end
     end
 
-    test "on map_state without reduce" do
-      message = ~r"map_state/2 must be called after a group_by/reduce operation"
+    test "on_trigger/2 without reduce" do
+      message = ~r"on_trigger/2 must be called after a group_by/reduce/emit_and_reduce operation"
 
       assert_raise ArgumentError, message, fn ->
         Flow.from_enumerable([1, 2, 3])
-        |> Flow.map_state(fn x -> x end)
+        |> Flow.on_trigger(fn x -> x end)
         |> Enum.to_list()
       end
     end
@@ -98,7 +98,7 @@ defmodule FlowTest do
     test "does not leave lingering messages nor monitors" do
       Flow.from_enumerable(1..100, stages: 4)
       |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-      |> Flow.emit(:state)
+      |> Flow.on_trigger(&{[&1], &1})
       |> Enum.to_list()
 
       refute_received _
@@ -245,7 +245,17 @@ defmodule FlowTest do
     end
 
     test "reduce/3" do
-      assert @flow |> Flow.reduce(fn -> 0 end, &+/2) |> Flow.map_state(&[&1]) |> Enum.sum() == 21
+      assert @flow
+             |> Flow.reduce(fn -> 0 end, &+/2)
+             |> Flow.on_trigger(&{[&1], &1})
+             |> Enum.sum() == 21
+    end
+
+    test "emit_and_reduce/3" do
+      assert @flow
+             |> Flow.emit_and_reduce(fn -> 0 end, &{[&1], &1 + &2})
+             |> Flow.on_trigger(&{[&1], &1})
+             |> Enum.sum() == 42
     end
 
     test "uniq_by/2" do
@@ -273,7 +283,7 @@ defmodule FlowTest do
       windows =
         Flow.from_enumerable(1..100, window: window, stages: 4, max_demand: 5)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.emit(:state)
+        |> Flow.on_trigger(&{[&1], &1})
         |> Enum.to_list()
 
       assert length(windows) == 8
@@ -321,7 +331,7 @@ defmodule FlowTest do
 
       assert @flow
              |> Flow.reduce(fn -> [] end, &[&1 | &2])
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[&1], &1})
              |> Enum.map(&Enum.sort/1)
              |> Enum.sort() == [[1, 5, 7, 9], [2, 6, 8], [3, 4], [10]]
     end
@@ -373,27 +383,28 @@ defmodule FlowTest do
     end
 
     test "reduce/3" do
-      assert @flow |> Flow.reduce(fn -> 0 end, &+/2) |> Flow.map_state(&[&1]) |> Enum.sort() ==
-               [7, 10, 16, 22]
+      assert @flow
+             |> Flow.reduce(fn -> 0 end, &+/2)
+             |> Flow.on_trigger(&{[&1], &1})
+             |> Enum.sort() == [7, 10, 16, 22]
 
       assert @flow
              |> Flow.reject(&(rem(&1, 2) == 0))
              |> Flow.reduce(fn -> 0 end, &+/2)
-             |> Flow.map_state(&[&1])
+             |> Flow.on_trigger(&{[&1], &1})
              |> Enum.sort() == [0, 0, 3, 22]
+    end
+
+    test "emit_and_reduce/3" do
+      assert @flow
+             |> Flow.emit_and_reduce(fn -> 0 end, &{[&1], &1 + &2})
+             |> Flow.on_trigger(&{[&1], &1})
+             |> Enum.sum() == 110
     end
 
     test "uniq_by/2" do
       result = @flow |> Flow.uniq_by(&rem(&1, 2)) |> Enum.sort()
       assert length(result) == 5
-    end
-
-    test "uniq_by/2 after reduce/3" do
-      assert @flow
-             |> Flow.reduce(fn -> [] end, &[&1 | &2])
-             |> Flow.map_state(&Enum.sort/1)
-             |> Flow.uniq_by(&rem(&1, 2))
-             |> Enum.sort() == [1, 2, 3, 4, 10]
     end
 
     test "keeps ordering" do
@@ -424,8 +435,7 @@ defmodule FlowTest do
         |> Flow.filter(&(rem(&1, 2) == 0))
         |> Flow.map(fn x -> x + 1 end)
         |> Flow.map(fn x -> x * 2 end)
-        |> Flow.map_state(&{&2, Enum.sort(&1)})
-        |> Flow.map_state(&[&1])
+        |> Flow.on_trigger(&{[{&2, Enum.sort(&1)}], &1})
 
       assert Enum.sort(flow) == [
                {{0, 4}, [6, 14, 18]},
@@ -551,7 +561,7 @@ defmodule FlowTest do
       assert Flow.from_enumerables([[1, 2, 3], [4, 5, 6], 7..10])
              |> Flow.partition(hash: fn x -> {x, 0} end, stages: 4)
              |> Flow.reduce(fn -> [] end, &[&1 | &2])
-             |> Flow.map_state(&[Enum.sort(&1)])
+             |> Flow.on_trigger(&{[Enum.sort(&1)], &1})
              |> Enum.sort() == [[], [], [], [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]]
     end
 
@@ -559,7 +569,9 @@ defmodule FlowTest do
       assert Flow.from_enumerables([[{1, 1}, {2, 2}, {3, 3}], [{1, 4}, {2, 5}, {3, 6}]])
              |> Flow.partition(key: {:elem, 0}, stages: 2)
              |> Flow.reduce(fn -> [] end, &[&1 | &2])
-             |> Flow.map_state(fn acc -> [acc |> Enum.map(&elem(&1, 1)) |> Enum.sort()] end)
+             |> Flow.on_trigger(fn acc ->
+               {[acc |> Enum.map(&elem(&1, 1)) |> Enum.sort()], acc}
+             end)
              |> Enum.sort() == [[1, 2, 4, 5], [3, 6]]
     end
 
@@ -572,7 +584,7 @@ defmodule FlowTest do
       assert Flow.from_enumerables(enumerables)
              |> Flow.partition(key: {:key, :key}, stages: 2)
              |> Flow.reduce(fn -> [] end, &[&1 | &2])
-             |> Flow.map_state(fn acc -> [acc |> Enum.map(& &1.value) |> Enum.sort()] end)
+             |> Flow.on_trigger(fn acc -> {[acc |> Enum.map(& &1.value) |> Enum.sort()], acc} end)
              |> Enum.sort() == [[1, 2, 4, 5], [3, 6]]
     end
 
@@ -586,7 +598,7 @@ defmodule FlowTest do
       assert Flow.from_enumerable(1..100)
              |> Flow.partition(window: window, stages: 4)
              |> Flow.reduce(fn -> [] end, &[&1 | &2])
-             |> Flow.map_state(&[Enum.sum(&1)])
+             |> Flow.on_trigger(&{[Enum.sum(&1)], &1})
              |> Enum.sort() == [173, 361, 364, 377, 797, 865, 895, 1218]
     end
   end
@@ -653,7 +665,7 @@ defmodule FlowTest do
     test "joins partitioned data with triggers" do
       partition_opts = [
         stages: 4,
-        window: Flow.Window.global() |> Flow.Window.trigger_every(2, :keep)
+        window: Flow.Window.global() |> Flow.Window.trigger_every(2)
       ]
 
       assert Flow.from_enumerable(1..10)
@@ -661,17 +673,6 @@ defmodule FlowTest do
              |> Flow.reduce(fn -> 0 end, &+/2)
              |> Flow.departition(fn -> [] end, &[&1 | &2], &Enum.sort/1)
              |> Enum.at(0) == [6, 7, 7, 8, 10, 16, 22, 22]
-
-      partition_opts = [
-        stages: 4,
-        window: Flow.Window.global() |> Flow.Window.trigger_every(2, :reset)
-      ]
-
-      assert Flow.from_enumerable(1..10)
-             |> Flow.partition(partition_opts)
-             |> Flow.reduce(fn -> 0 end, &+/2)
-             |> Flow.departition(fn -> [] end, &[&1 | &2], &Enum.sort/1)
-             |> Enum.at(0) == [0, 0, 6, 7, 8, 8, 10, 16]
     end
 
     test "joins partitioned data with map operations" do
@@ -686,15 +687,16 @@ defmodule FlowTest do
     test "joins partitioned data with reduce operations" do
       partition_opts = [
         stages: 4,
-        window: Flow.Window.global() |> Flow.Window.trigger_every(2, :reset)
+        window: Flow.Window.global() |> Flow.Window.trigger_every(2)
       ]
 
       assert Flow.from_enumerable(1..10)
              |> Flow.partition(partition_opts)
              |> Flow.reduce(fn -> 0 end, &+/2)
+             |> Flow.on_trigger(&{[&1], 0})
              |> Flow.departition(fn -> [] end, &[&1 | &2], &Enum.sort/1)
              |> Flow.reduce(fn -> 0 end, &(Enum.sum(&1) + &2))
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[&1], 0})
              |> Enum.at(0) == 55
     end
 
@@ -732,14 +734,14 @@ defmodule FlowTest do
     test "merges different flows together" do
       assert merged_flows(stages: 4, min_demand: 5)
              |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[&1], &1})
              |> Enum.sum() == 10100
     end
 
     test "allows custom partitioning" do
       assert merged_flows(stages: 4, min_demand: 5, hash: fn x -> {x, 0} end)
              |> Flow.reduce(fn -> [] end, &[&1 | &2])
-             |> Flow.map_state(&[Enum.sum(&1)])
+             |> Flow.on_trigger(&{[Enum.sum(&1)], &1})
              |> Enum.sort() == [0, 0, 0, 10100]
     end
 
@@ -752,7 +754,7 @@ defmodule FlowTest do
 
       assert merged_flows(window: window, stages: 4, min_demand: 5)
              |> Flow.reduce(fn -> [] end, &[&1 | &2])
-             |> Flow.map_state(&[Enum.sum(&1)])
+             |> Flow.on_trigger(&{[Enum.sum(&1)], &1})
              |> Enum.sort() == [594, 596, 654, 706, 1248, 1964, 2066, 2272]
     end
   end
@@ -904,7 +906,7 @@ defmodule FlowTest do
                stages: 2
              )
              |> Flow.reduce(fn -> 0 end, fn {k, v}, acc -> k + v + acc end)
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[&1], &1})
              |> Enum.sort() == [9, 12]
     end
 
@@ -919,7 +921,7 @@ defmodule FlowTest do
                stages: 2
              )
              |> Flow.reduce(fn -> 0 end, fn {k, v}, acc -> k + v + acc end)
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[&1], &1})
              |> Enum.sort() == [44, 146]
     end
 
@@ -960,7 +962,7 @@ defmodule FlowTest do
 
       partition_opts = [
         max_demand: 1,
-        window: Flow.Window.global() |> Flow.Window.trigger_every(1, :reset)
+        window: Flow.Window.global() |> Flow.Window.trigger_every(1)
       ]
 
       {:ok, pid} =
@@ -968,7 +970,7 @@ defmodule FlowTest do
         |> Flow.filter(&(rem(&1, 2) == 0))
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(&[&1 + 1])
+        |> Flow.on_trigger(&{[&1 + 1], 0})
         |> Flow.into_stages([])
 
       GenStage.sync_subscribe(forwarder, to: pid, cancel: :transient)

@@ -7,14 +7,14 @@ defmodule Flow do
   although computations will be executed in parallel using
   multiple `GenStage`s.
 
-  Flow was also designed to work with both bounded (finite)
-  and unbounded (infinite) data. By default, Flow will work
+  Flow is designed to work with both bounded (finite) and
+  unbounded (infinite) data. By default, Flow will work
   with batches of 500 items. This means Flow will only show
   improvements when working with larger collections. However,
   for certain cases, such as IO-bound flows, a smaller batch size
   can be configured through the `:min_demand` and `:max_demand`
-  options supported by `from_enumerable/2`, `from_stages/2`
-  and `partition/2`.
+  options supported by `from_enumerable/2`, `from_stages/2`,
+  `partition/2` and `departition/5`.
 
   Flow also provides the concepts of "windows" and "triggers",
   which allow developers to split the data into arbitrary
@@ -22,7 +22,7 @@ defmodule Flow do
   to be materialized at different intervals, allowing developers
   to peek at results as they are computed.
 
-  This README will cover the main constructs and concepts behind
+  This module doc will cover the main constructs and concepts behind
   Flow, with examples. There is also a presentation about GenStage
   and Flow from José Valim at ElixirConf 2016, which covers
   data processing concepts for those unfamilar with the domain:
@@ -244,8 +244,17 @@ defmodule Flow do
   the reduce operation needs to traverse the whole partition to
   complete, how can we do so if the data never finishes?
 
-  To answer this question, we need to talk about data completion,
-  windows and triggers.
+  The answer here lies in triggers. Every partition may have a
+  `on_trigger/2` callback which receives the partition accumulator
+  and returns the events to the emit and the accumulator to be
+  used after the trigger. All flows have at least one trigger:
+  the `:done` trigger which is emitted when all the data has
+  been processed. In this case, the accumulator returned by
+  `on_trigger/2` won't be used, only the events it emits.
+
+  However, flow provides many conveniences for working with
+  unbound data, allowing us to set windows, time-based triggers,
+  element counters and more.
 
   ## Data completion, windows and triggers
 
@@ -269,13 +278,19 @@ defmodule Flow do
   Once a window is specified, we can create triggers that tell us
   when to checkpoint the data, allowing us to report our progress
   while the data streams through the system, regardless of whether
-  the data is bounded or unbounded.
+  the data is bounded or unbounded. Every time a trigger is invoked,
+  the `on_trigger/2` callback of that partition is invoked, allowing
+  us to control which events to emit and the accumulator to be used
+  the next time the partition starts reducing data.
 
   Windows and triggers effectively control how the `reduce/3` function
-  works. `reduce/3` is invoked per window, while a trigger configures
-  when `reduce/3` halts so we can checkpoint the data before resuming
-  the computation with an old or new accumulator. See `Flow.Window`
-  for a complete introduction to windows and triggers.
+  works. While windows and triggers allow us to control when data is
+  emitted, note data can be emitted at any time during the reducing
+  step by using `emit_and_reduce/3`. In truth, all window and trigger
+  functinality provided by Flow can also be built by hand using the
+  `emit_and_reduce/3` and `on_trigger/2` functions.
+
+  See `Flow.Window` for a complete introduction to windows and triggers.
 
   ## Supervisable flows
 
@@ -321,9 +336,9 @@ defmodule Flow do
         :ets.update_counter(ets, word, {2, 1}, {word, 0})
         ets
       end)
-      |> Flow.map_state(fn ets ->         # ETS
+      |> Flow.on_trigger(fn ets ->
         :ets.give_away(ets, parent, [])
-        [ets]
+        {[ets], :new_reduce_state_which_wont_be_used} # Emit the ETS
       end)
       |> Enum.to_list()
 
@@ -339,7 +354,7 @@ defmodule Flow do
     * ETS - the third stores the data in a ETS table and uses its counter
       operations. For counters and a large dataset this provides a great
       performance benefit as it generates less garbage. At the end, we
-      call `map_state/2` to transfer the ETS table to the parent process
+      call `on_trigger/2` to transfer the ETS table to the parent process
       and wrap the table in a list so we can access it on `Enum.to_list/1`.
       This step is not strictly required. For example, one could write the
       table to disk with `:ets.tab2file/2` at the end of the computation
@@ -412,6 +427,8 @@ defmodule Flow do
           window: Flow.Window.t()
         }
 
+  @type join :: :inner | :left_outer | :right_outer | :outer
+
   @typep producers ::
            nil
            | {:stages, GenStage.stage() | [GenStage.stage()]}
@@ -422,10 +439,10 @@ defmodule Flow do
 
   @typep operation ::
            {:mapper, atom(), [term()]}
-           | {:partition, keyword()}
-           | {:map_state, fun()}
-           | {:reduce, fun(), fun()}
            | {:uniq, fun()}
+           | {:reduce, fun(), fun()}
+           | {:emit_and_reduce, fun(), fun()}
+           | {:on_trigger, fun()}
 
   ## Building
 
@@ -644,15 +661,7 @@ defmodule Flow do
        %{id: 1, title: "hello", comment: "outstanding"}]
 
   """
-  @spec bounded_join(
-          :inner | :left_outer | :right_outer | :outer,
-          t,
-          t,
-          fun(),
-          fun(),
-          fun(),
-          keyword()
-        ) :: t
+  @spec bounded_join(join, t, t, fun(), fun(), fun(), keyword()) :: t
   def bounded_join(
         mode,
         %Flow{} = left,
@@ -704,16 +713,7 @@ defmodule Flow do
        %{id: 2, title: "world", comment: "great follow up", timestamp: 1000}]
 
   """
-  @spec window_join(
-          :inner | :left_outer | :right_outer | :outer,
-          t,
-          t,
-          Flow.Window.t(),
-          fun(),
-          fun(),
-          fun(),
-          keyword()
-        ) :: t
+  @spec window_join(join, t, t, Flow.Window.t(), fun(), fun(), fun(), keyword()) :: t
   def window_join(
         mode,
         %Flow{} = left,
@@ -754,7 +754,7 @@ defmodule Flow do
   """
   @spec run(t) :: :ok
   def run(flow) do
-    [] = flow |> emit(:nothing) |> Enum.to_list()
+    [] = flow |> emit_nothing() |> Enum.to_list()
     :ok
   end
 
@@ -782,7 +782,7 @@ defmodule Flow do
   """
   @spec start_link(t, keyword()) :: GenServer.on_start()
   def start_link(flow, options \\ []) do
-    Flow.Coordinator.start_link(emit(flow, :nothing), :consumer, [], options)
+    Flow.Coordinator.start_link(emit_nothing(flow), :consumer, [], options)
   end
 
   @doc """
@@ -835,7 +835,7 @@ defmodule Flow do
   """
   @spec each(t, (term -> term)) :: t
   def each(flow, each) when is_function(each, 1) do
-    add_operation(flow, {:mapper, :each, [each]})
+    add_mapper(flow, :each, [each])
   end
 
   @doc """
@@ -850,7 +850,7 @@ defmodule Flow do
   """
   @spec filter(t, (term -> term)) :: t
   def filter(flow, filter) when is_function(filter, 1) do
-    add_operation(flow, {:mapper, :filter, [filter]})
+    add_mapper(flow, :filter, [filter])
   end
 
   @doc """
@@ -865,7 +865,7 @@ defmodule Flow do
   """
   @spec filter_map(t, (term -> term), (term -> term)) :: t
   def filter_map(flow, filter, mapper) when is_function(filter, 1) and is_function(mapper, 1) do
-    add_operation(flow, {:mapper, :filter_map, [filter, mapper]})
+    add_mapper(flow, :filter_map, [filter, mapper])
   end
 
   @doc """
@@ -884,7 +884,7 @@ defmodule Flow do
   """
   @spec map(t, (term -> term)) :: t
   def map(flow, mapper) when is_function(mapper, 1) do
-    add_operation(flow, {:mapper, :map, [mapper]})
+    add_mapper(flow, :map, [mapper])
   end
 
   @doc """
@@ -917,7 +917,7 @@ defmodule Flow do
   """
   @spec flat_map(t, (term -> Enumerable.t())) :: t
   def flat_map(flow, flat_mapper) when is_function(flat_mapper, 1) do
-    add_operation(flow, {:mapper, :flat_map, [flat_mapper]})
+    add_mapper(flow, :flat_map, [flat_mapper])
   end
 
   @doc """
@@ -932,7 +932,7 @@ defmodule Flow do
   """
   @spec reject(t, (term -> term)) :: t
   def reject(flow, filter) when is_function(filter, 1) do
-    add_operation(flow, {:mapper, :reject, [filter]})
+    add_mapper(flow, :reject, [filter])
   end
 
   ## Reducers
@@ -1013,7 +1013,7 @@ defmodule Flow do
       a given partition and the accumulator and merges them together.
     * the done function - a function that receives the final accumulator.
 
-  A set of options may also be given to customize with the `:window`,
+  A set of options may also be given to customize the `:window`,
   `:min_demand` and `:max_demand`.
 
   ## Examples
@@ -1048,8 +1048,9 @@ defmodule Flow do
       File.stream!("path/to/some/file")
       |> Flow.from_enumerable()
       |> Flow.map(&String.split/1)
-      |> Flow.partition(window: Flow.Window.global |> Flow.Window.trigger_every(1000, :reset))
+      |> Flow.partition(window: Flow.Window.global |> Flow.Window.trigger_every(1000))
       |> Flow.reduce(fn -> %{} end, fn event, acc -> Map.update(acc, event, 1, & &1 + 1) end)
+      |> Flow.on_trigger(fn acc -> {[acc], %{}} end)
       |> Flow.departition(&Map.new/0, &Map.merge(&1, &2, fn _, v1, v2 -> v1 + v2 end), &(&1))
       |> Enum.to_list
 
@@ -1060,8 +1061,10 @@ defmodule Flow do
   def departition(%Flow{} = flow, acc_fun, merge_fun, done_fun, options \\ [])
       when is_function(acc_fun, 0) and is_function(merge_fun, 2) and
              (is_function(done_fun, 1) or is_function(done_fun, 2)) do
-    unless has_reduce?(flow) do
-      raise ArgumentError, "departition/5 must be called after a group_by/reduce operation"
+    unless has_any_reduce?(flow) do
+      raise ArgumentError,
+            "departition/5 must be called after a group_by/reduce/emit_and_reduce operation " <>
+              "as it works on the accumulated state"
     end
 
     done_fun =
@@ -1072,10 +1075,16 @@ defmodule Flow do
       end
 
     flow =
-      map_state(flow, fn state, {partition, _}, trigger ->
-        [{state, partition, trigger}]
-      end)
+      inject_on_trigger(
+        flow,
+        fn events, {partition, _}, trigger -> Enum.map(events, &{&1, partition, trigger}) end,
+        fn acc, {partition, _}, trigger -> [{acc, partition, trigger}] end
+      )
 
+    build_departition(flow, acc_fun, merge_fun, done_fun, options)
+  end
+
+  defp build_departition(flow, acc_fun, merge_fun, done_fun, options) do
     {window, options} =
       options
       |> Keyword.put(:dispatcher, GenStage.DemandDispatcher)
@@ -1168,16 +1177,36 @@ defmodule Flow do
   @spec reduce(t, (() -> acc), (term, acc -> acc)) :: t when acc: term()
   def reduce(flow, acc_fun, reducer_fun) when is_function(reducer_fun, 2) do
     cond do
-      has_reduce?(flow) ->
+      has_any_reduce?(flow) ->
         raise ArgumentError,
-              "cannot call group_by/reduce on a flow after another group_by/reduce operation " <>
-                "(it must be called only once per partition, consider using map_state/2 instead)"
+              "cannot call group_by/reduce/emit_and_reduce on a flow after another " <>
+                "group_by/reduce/emit_and_reduce operation (these functions can only be called " <>
+                "once per partition, for subsequent transformations, consider using on_trigger/2 instead)"
 
       is_function(acc_fun, 0) ->
         add_operation(flow, {:reduce, acc_fun, reducer_fun})
 
       true ->
         raise ArgumentError, "Flow.reduce/3 expects the accumulator to be given as a function"
+    end
+  end
+
+  @spec emit_and_reduce(t, (() -> acc), (term, acc -> {[event], acc})) :: t
+        when acc: term(), event: term()
+  def emit_and_reduce(flow, acc_fun, reducer_fun) when is_function(reducer_fun, 2) do
+    cond do
+      has_any_reduce?(flow) ->
+        raise ArgumentError,
+              "cannot call group_by/reduce/emit_and_reduce on a flow after another " <>
+                "group_by/reduce/emit_and_reduce operation (these functions can only be called " <>
+                "once per partition, for subsequent transformations, consider using on_trigger/2 instead)"
+
+      is_function(acc_fun, 0) ->
+        add_operation(flow, {:emit_and_reduce, acc_fun, reducer_fun})
+
+      true ->
+        raise ArgumentError,
+              "Flow.emit_and_reduce/3 expects the accumulator to be given as a function"
     end
   end
 
@@ -1194,7 +1223,9 @@ defmodule Flow do
   with the top `n` events. The sorting is given by the `sort_fun`.
 
   `take_sort/3` is built on top of `departition/5`, which means it will
-  also take and sort entries across windows.
+  also take and sort entries across windows. A set of options may also
+  be given to customize the `:window`, `:min_demand` and `:max_demand`
+  of when departitioning.
 
   ## Examples
 
@@ -1213,14 +1244,23 @@ defmodule Flow do
       [[{"www.foo.com", 3}]]
 
   """
-  def take_sort(flow, n, sort_fun \\ &<=/2) when is_integer(n) and n > 0 do
-    unless has_reduce?(flow) do
-      raise ArgumentError, "take_sort/3 must be called after a group_by/reduce operation"
+  def take_sort(flow, n, sort_fun \\ &<=/2, options \\ []) when is_integer(n) and n > 0 do
+    unless has_any_reduce?(flow) do
+      raise ArgumentError,
+            "take_sort/3 must be called after a group_by/reduce/emit_and_reduce operation " <>
+              "as it works on the accumulated state"
     end
 
     flow
-    |> map_state(&(&1 |> Enum.sort(sort_fun) |> Enum.take(n)))
-    |> departition(fn -> [] end, &merge_sorted(&1, &2, n, sort_fun), fn x -> x end)
+    |> inject_on_trigger(fn events, {partition, _}, trigger ->
+      [{events |> Enum.sort(sort_fun) |> Enum.take(n), partition, trigger}]
+    end)
+    |> build_departition(
+      fn -> [] end,
+      &merge_sorted(&1, &2, n, sort_fun),
+      fn acc, _ -> acc end,
+      options
+    )
   end
 
   defp merge_sorted([], other, _, _), do: other
@@ -1252,8 +1292,8 @@ defmodule Flow do
   ## Examples
 
       iex> flow = Flow.from_enumerable(~w[the quick brown fox], stages: 1)
-      iex> flow |> Flow.group_by(&String.length/1) |> Flow.emit(:state) |> Enum.to_list()
-      [%{3 => ["fox", "the"], 5 => ["brown", "quick"]}]
+      iex> flow |> Flow.group_by(&String.length/1) |> Enum.sort()
+      [{3, ["fox", "the"]}, {5, ["brown", "quick"]}]
 
   """
   @spec group_by(t, (term -> term), (term -> term)) :: t
@@ -1343,64 +1383,67 @@ defmodule Flow do
   """
   @spec uniq_by(t, (term -> term)) :: t
   def uniq_by(flow, by) when is_function(by, 1) do
+    if has_any_reduce?(flow) do
+      raise ArgumentError, "uniq/uniq_by cannot be called after group_by/reduce/emit_and_reduce"
+    end
+
     add_operation(flow, {:uniq, by})
   end
 
   @doc """
-  Controls which values should be emitted from now.
+  Controls which values should be emitted.
 
   The argument can be either `:events`, `:state` or `:nothing`.
   This step must be called after the reduce operation and it will
   guarantee the state is a list that can be sent downstream.
 
-  Most commonly `:events` is used and each partition will emit the events it has
-  processed to the next stages. However, sometimes we want
-  to emit counters or other data structures as a result of
+  Most commonly `:events` is used and each partition will emit the
+  events it has processed to the next stages. However, sometimes we
+  want to emit counters or other data structures as a result of
   our computations. In such cases, the emit argument can be
-  set to `:state`, to return the `:state` from `reduce/3`
-  or `map_state/2` or even the processed collection as a whole. The
-  argument value of `:nothing` is used by `run/1` and `start_link/2`.
+  set to `:state`, to return the `:state` from `reduce/3` or even
+  the processed collection as a whole.
   """
   @spec emit(t, :events | :state | :nothing) :: t | Enumerable.t()
-  def emit(flow, :events) do
-    flow
-  end
-
-  def emit(flow, :state) do
-    unless has_reduce?(flow) do
-      raise ArgumentError, "emit/2 must be called after a group_by/reduce operation"
+  def emit(flow, type) do
+    unless has_any_reduce?(flow) do
+      raise ArgumentError,
+            "emit/2 must be called after a group_by/reduce operation as it works on the accumulated state"
     end
 
-    map_state(flow, fn acc, _, _ -> [acc] end)
-  end
+    if has_emit_reduce?(flow) do
+      raise ArgumentError,
+            "emit/2 cannot be called after emit_and_reduce/3 since events have already been emitted " <>
+              "(use on_trigger/2 if you want to further emit events or modify the state)"
+    end
 
-  def emit(%{operations: operations} = flow, :nothing) do
-    case inject_to_nothing(operations) do
-      :map_state -> map_state(flow, fn _, _, _ -> [] end)
-      :reduce -> reduce(flow, fn -> [] end, fn _, acc -> acc end)
+    if has_on_trigger?(flow) do
+      raise ArgumentError,
+            "emit/2 cannot be called after on_trigger/2 since events have already been emitted"
+    end
+
+    case type do
+      :events -> flow
+      :nothing -> add_operation(flow, {:on_trigger, fn acc, _, _ -> {[], acc} end})
+      :state -> add_operation(flow, {:on_trigger, fn acc, _, _ -> {[acc], acc} end})
     end
   end
-
-  def emit(_, emit) do
-    raise ArgumentError, "unknown option for emit: #{inspect(emit)}"
-  end
-
-  defp inject_to_nothing([{:reduce, _, _} | _]), do: :map_state
-  defp inject_to_nothing([_ | ops]), do: inject_to_nothing(ops)
-  defp inject_to_nothing([]), do: :reduce
 
   @doc """
   Applies the given function over the window state.
 
-  This function must be called after `reduce/3` as it maps over
-  the state accumulated by `reduce/3`. `map_state/2` is invoked
-  per window on every stage whenever there is a trigger: this
-  gives us an understanding of the window data while leveraging
-  the parallelism between stages.
+  This function must be called after `group_by/3`, `reduce/3` or
+  `emit_and_reduce/3` as it works on the accumulated state.
+  `on_trigger/2` is invoked per window on every stage whenever
+  there is a trigger: this gives us an understanding of the window
+  data while leveraging the parallelism between stages.
 
-  ## The mapper function
+  The given callback must return a tuple with elements to emit
+  and the new accumulator.
 
-  The `mapper` function may have arity 1, 2 or 3.
+  ## The callback arguments
+
+  The `callback` function may have arity 1, 2 or 3.
 
   The first argument is the state.
 
@@ -1429,12 +1472,9 @@ defmodule Flow do
   Where `window` is an integer identifying the timestamp for the window
   being triggered.
 
-  The value returned by the `mapper` function is passed forward to the
-  upcoming flow functions.
-
   ## Examples
 
-  We can use `map_state/2` to transform the collection after
+  We can use `on_trigger/2` to transform the collection after
   processing. For example, if we want to count the amount of
   unique letters in a sentence, we can partition the data,
   then reduce over the unique entries and finally return the
@@ -1445,92 +1485,74 @@ defmodule Flow do
       ...> end)
       iex> flow = Flow.partition(flow)
       iex> flow = Flow.reduce(flow, fn -> %{} end, &Map.put(&2, &1, true))
-      iex> flow |> Flow.map_state(fn map -> map_size(map) end) |> Flow.emit(:state) |> Enum.sum()
+      iex> flow |> Flow.on_trigger(fn map -> {[map_size(map)], map} end) |> Enum.sum()
       16
 
   """
-  @spec map_state(
+  @spec on_trigger(
           t,
-          (term -> term)
-          | (term, term -> term)
-          | (term, term, {Flow.Window.type(), Flow.Window.id(), Flow.Window.trigger()} -> term)
+          (acc -> {[event], acc})
+          | (acc, partition_info -> {[event], acc})
+          | (acc, partition_info, window_info -> {[event], acc})
         ) :: t
-  def map_state(flow, mapper) when is_function(mapper, 3) do
-    do_map_state(flow, mapper)
+        when acc: term,
+             event: term,
+             partition_info: {non_neg_integer, pos_integer},
+             window_info: {Flow.Window.type(), Flow.Window.id(), Flow.Window.trigger()}
+  def on_trigger(flow, on_trigger) when is_function(on_trigger, 3) do
+    add_on_trigger(flow, fn acc, index, window ->
+      validate_on_trigger!(on_trigger.(acc, index, window))
+    end)
   end
 
-  def map_state(flow, mapper) when is_function(mapper, 2) do
-    do_map_state(flow, fn acc, index, _ -> mapper.(acc, index) end)
+  def on_trigger(flow, on_trigger) when is_function(on_trigger, 2) do
+    add_on_trigger(flow, fn acc, index, _ ->
+      validate_on_trigger!(on_trigger.(acc, index))
+    end)
   end
 
-  def map_state(flow, mapper) when is_function(mapper, 1) do
-    do_map_state(flow, fn acc, _, _ -> mapper.(acc) end)
+  def on_trigger(flow, on_trigger) when is_function(on_trigger, 1) do
+    add_on_trigger(flow, fn acc, _, _ ->
+      validate_on_trigger!(on_trigger.(acc))
+    end)
   end
 
-  defp do_map_state(flow, mapper) do
-    unless has_reduce?(flow) do
-      raise ArgumentError, "map_state/2 must be called after a group_by/reduce operation"
+  defp validate_on_trigger!({events, _} = result) when is_list(events) do
+    result
+  end
+
+  defp validate_on_trigger!(other) do
+    raise "expected on_trigger/2 callback to return a tuple with a list as first element " <>
+            "and a term as second, got: #{inspect(other)}"
+  end
+
+  defp add_on_trigger(flow, on_trigger) do
+    unless has_any_reduce?(flow) do
+      raise ArgumentError,
+            "on_trigger/2 must be called after a group_by/reduce/emit_and_reduce operation " <>
+              "as it works on the accumulated state"
     end
 
-    add_operation(flow, {:map_state, mapper})
-  end
-
-  @doc """
-  Applies the given function over the stage state without changing its value.
-
-  It is similar to `map_state/2` except that the value returned by `mapper`
-  is ignored.
-
-      iex> parent = self()
-      iex> flow = Flow.from_enumerable(["the quick brown fox"]) |> Flow.flat_map(fn word ->
-      ...>    String.graphemes(word)
-      ...> end)
-      iex> flow = flow |> Flow.partition(stages: 2) |> Flow.reduce(fn -> %{} end, &Map.put(&2, &1, true))
-      iex> flow = flow |> Flow.each_state(fn map -> send(parent, map_size(map)) end)
-      iex> Flow.run(flow)
-      iex> receive do
-      ...>   6 -> :ok
-      ...> end
-      :ok
-      iex> receive do
-      ...>   10 -> :ok
-      ...> end
-      :ok
-
-  """
-  @spec each_state(
-          t,
-          (term -> term)
-          | (term, term -> term)
-          | (term, term, {Flow.Window.type(), Flow.Window.id(), Flow.Window.trigger()} -> term)
-        ) :: t
-  def each_state(flow, mapper) when is_function(mapper, 3) do
-    do_each_state(flow, fn acc, index, trigger ->
-      mapper.(acc, index, trigger)
-      acc
-    end)
-  end
-
-  def each_state(flow, mapper) when is_function(mapper, 2) do
-    do_each_state(flow, fn acc, index, _ ->
-      mapper.(acc, index)
-      acc
-    end)
-  end
-
-  def each_state(flow, mapper) when is_function(mapper, 1) do
-    do_each_state(flow, fn acc, _, _ ->
-      mapper.(acc)
-      acc
-    end)
-  end
-
-  defp do_each_state(flow, mapper) do
-    unless has_reduce?(flow) do
-      raise ArgumentError, "each_state/2 must be called after a group_by/reduce operation"
+    if has_on_trigger?(flow) do
+      raise ArgumentError, "on_trigger/2 can only be called once per partition"
     end
 
-    add_operation(flow, {:map_state, mapper})
+    add_operation(flow, {:on_trigger, on_trigger})
+  end
+
+  defp add_mapper(flow, name, args) do
+    if has_emit_reduce?(flow) do
+      raise ArgumentError,
+            "#{name}/#{length(args)} cannot be called after emit_and_reduce/3 since events " <>
+              "have already been emitted (use on_trigger/2 if you want to further emit events or modify the state)"
+    end
+
+    if has_on_trigger?(flow) do
+      raise ArgumentError,
+            "#{name}/#{length(args)} cannot be called after on_trigger/2 since events have already been emitted"
+    end
+
+    add_operation(flow, {:mapper, name, args})
   end
 
   defp add_operation(%Flow{operations: operations} = flow, operation) do
@@ -1541,8 +1563,46 @@ defmodule Flow do
     raise ArgumentError, "expected a flow as argument, got: #{inspect(flow)}"
   end
 
-  defp has_reduce?(%{operations: operations}) do
-    Enum.any?(operations, &match?({:reduce, _, _}, &1))
+  defp emit_nothing(flow) do
+    inject_on_trigger(flow, fn _, _, _ -> [] end)
+  end
+
+  defp has_any_reduce?(%{operations: operations}) do
+    Enum.any?(operations, &match?({op, _, _} when op in [:reduce, :emit_and_reduce], &1))
+  end
+
+  defp has_emit_reduce?(%{operations: operations}) do
+    Enum.any?(operations, &match?({:emit_and_reduce, _, _}, &1))
+  end
+
+  defp has_on_trigger?(%{operations: operations}) do
+    Enum.any?(operations, &match?({:on_trigger, _, _}, &1))
+  end
+
+  defp inject_on_trigger(flow, fun) do
+    inject_on_trigger(flow, fun, fun)
+  end
+
+  defp inject_on_trigger(flow, events_fun, acc_fun) do
+    update_in(flow.operations, &inject_on_trigger(&1, [], events_fun, acc_fun))
+  end
+
+  defp inject_on_trigger([{:on_trigger, operation} | rest], pre, events_fun, _acc_fun) do
+    operation = fn state, index, trigger ->
+      {events, acc} = operation.(state, index, trigger)
+      {events_fun.(events, index, trigger), acc}
+    end
+
+    Enum.reverse(pre, [{:on_trigger, operation} | rest])
+  end
+
+  defp inject_on_trigger([op | ops], pre, events_fun, acc_fun) do
+    inject_on_trigger(ops, [op | pre], events_fun, acc_fun)
+  end
+
+  defp inject_on_trigger([], pre, _events_fun, acc_fun) do
+    on_trigger = fn acc, index, trigger -> {acc_fun.(acc, index, trigger), acc} end
+    [{:on_trigger, on_trigger} | Enum.reverse(pre)]
   end
 
   defimpl Enumerable do

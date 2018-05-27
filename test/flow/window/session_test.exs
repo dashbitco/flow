@@ -5,17 +5,6 @@ defmodule Flow.Window.SessionTest do
     Flow.Window.session(1, :second, fn x -> x end)
   end
 
-  @tag :capture_log
-  test "can't be departitioned" do
-    assert catch_exit(
-             Flow.from_enumerable(1..100, stages: 4, max_demand: 5)
-             |> Flow.partition(window: single_window(), stages: 4, key: fn _ -> 0 end)
-             |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-             |> Flow.departition(fn -> 0 end, &(&1 + &2), & &1)
-             |> Enum.to_list()
-           )
-  end
-
   describe "single window" do
     test "with multiple mappers and reducers" do
       assert Flow.from_enumerable(1..100, stages: 4, max_demand: 5)
@@ -57,7 +46,7 @@ defmodule Flow.Window.SessionTest do
 
     test "trigger discard with large demand" do
       partition_opts = [
-        window: single_window() |> Flow.Window.trigger_every(10, :reset),
+        window: single_window() |> Flow.Window.trigger_every(10),
         stages: 1,
         key: fn _ -> 0 end
       ]
@@ -65,13 +54,13 @@ defmodule Flow.Window.SessionTest do
       assert Flow.from_enumerable(1..100)
              |> Flow.partition(partition_opts)
              |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[&1], 0})
              |> Enum.to_list() == [55, 155, 255, 355, 455, 555, 655, 755, 855, 955, 0]
     end
 
     test "trigger discard with small demand" do
       partition_opts = [
-        window: single_window() |> Flow.Window.trigger_every(10, :reset),
+        window: single_window() |> Flow.Window.trigger_every(10),
         stages: 1,
         max_demand: 5,
         key: fn _ -> 0 end
@@ -80,7 +69,7 @@ defmodule Flow.Window.SessionTest do
       assert Flow.from_enumerable(1..100)
              |> Flow.partition(partition_opts)
              |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[&1], 0})
              |> Enum.to_list() == [55, 155, 255, 355, 455, 555, 655, 755, 855, 955, 0]
     end
 
@@ -101,7 +90,7 @@ defmodule Flow.Window.SessionTest do
 
     test "trigger names" do
       partition_opts = [
-        window: single_window() |> Flow.Window.trigger_every(10, :reset),
+        window: single_window() |> Flow.Window.trigger_every(10),
         stages: 1,
         key: fn _ -> 0 end
       ]
@@ -110,8 +99,9 @@ defmodule Flow.Window.SessionTest do
         Flow.from_enumerable(1..100)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:session, {0, 1, _}, trigger} -> {trigger, state} end)
-        |> Flow.emit(:state)
+        |> Flow.on_trigger(fn state, _, {:session, {0, 1, _}, trigger} ->
+          {[{trigger, state}], 0}
+        end)
         |> Enum.sort()
 
       assert result == [
@@ -141,8 +131,7 @@ defmodule Flow.Window.SessionTest do
              |> Flow.from_enumerable(max_demand: 5, stages: 2)
              |> Flow.partition(partition_opts)
              |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-             |> Flow.map_state(&(&1 * 2))
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[&1 * 2], &1})
              |> Enum.take(1) == [110]
     end
 
@@ -150,7 +139,7 @@ defmodule Flow.Window.SessionTest do
       partition_opts = [stages: 1, max_demand: 10, window: single_window(), key: fn _ -> 0 end]
 
       reduce_fun = fn ->
-        Process.send_after(self(), {:trigger, :reset, :sample}, 200)
+        Process.send_after(self(), {:trigger, :sample}, 200)
         0
       end
 
@@ -158,8 +147,7 @@ defmodule Flow.Window.SessionTest do
              |> Flow.from_enumerable(max_demand: 5, stages: 2)
              |> Flow.partition(partition_opts)
              |> Flow.reduce(reduce_fun, &(&1 + &2))
-             |> Flow.map_state(&{&1 * 2, &2, &3})
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[{&1 * 2, &2, &3}], reduce_fun.()})
              |> Enum.take(1) == [{110, {0, 1}, {:session, {0, 1, 10}, :sample}}]
     end
   end
@@ -191,8 +179,8 @@ defmodule Flow.Window.SessionTest do
         Flow.from_enumerable(1..100, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:session, session, trigger} ->
-          [{state, session, trigger}]
+        |> Flow.on_trigger(fn state, _, {:session, session, trigger} ->
+          {[{state, session, trigger}], state}
         end)
         |> Enum.to_list()
 
@@ -239,8 +227,8 @@ defmodule Flow.Window.SessionTest do
         Flow.from_enumerable(1..100, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:session, session, trigger} ->
-          [{state, session, trigger}]
+        |> Flow.on_trigger(fn state, _, {:session, session, trigger} ->
+          {[{state, session, trigger}], state}
         end)
         |> Enum.to_list()
 
@@ -272,8 +260,8 @@ defmodule Flow.Window.SessionTest do
         |> Flow.from_enumerable(max_demand: 5, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:session, session, trigger} ->
-          [{state, session, trigger}]
+        |> Flow.on_trigger(fn state, _, {:session, session, trigger} ->
+          {[{state, session, trigger}], state}
         end)
         |> Enum.take(2)
 
@@ -304,8 +292,8 @@ defmodule Flow.Window.SessionTest do
         Flow.from_enumerable(1..100, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:session, session, trigger} ->
-          [{state, session, trigger}]
+        |> Flow.on_trigger(fn state, _, {:session, session, trigger} ->
+          {[{state, session, trigger}], state}
         end)
         |> Enum.sort()
 
@@ -354,8 +342,8 @@ defmodule Flow.Window.SessionTest do
         Flow.from_enumerable(1..100, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:session, session, trigger} ->
-          [{state, session, trigger}]
+        |> Flow.on_trigger(fn state, _, {:session, session, trigger} ->
+          {[{state, session, trigger}], state}
         end)
         |> Enum.sort()
 
@@ -389,8 +377,8 @@ defmodule Flow.Window.SessionTest do
         |> Flow.from_enumerable(max_demand: 5, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:session, session, trigger} ->
-          [{state, session, trigger}]
+        |> Flow.on_trigger(fn state, _, {:session, session, trigger} ->
+          {[{state, session, trigger}], state}
         end)
         |> Enum.take(4)
 

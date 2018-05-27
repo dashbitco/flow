@@ -2,11 +2,7 @@ defmodule Flow.Window.Fixed do
   @moduledoc false
 
   @enforce_keys [:by, :duration]
-  defstruct [:by, :duration, :trigger, lateness: {0, :keep}, periodically: []]
-
-  def departition(flow) do
-    flow
-  end
+  defstruct [:by, :duration, :trigger, lateness: 0, periodically: []]
 
   def materialize(
         %{by: by, duration: duration, lateness: lateness},
@@ -48,12 +44,11 @@ defmodule Flow.Window.Fixed do
       min_max = producers |> Map.values() |> Enum.min_max()
 
       {trigger_emit, acc} = emit_trigger_messages(all, min_max, windows, index, lateness_fun)
-
       {producers, reducer_emit ++ trigger_emit, acc}
     end
 
-    trigger = fn acc, index, op, name ->
-      handle_trigger(ref, duration, acc, index, op, name, reducer_acc, reducer_trigger)
+    trigger = fn acc, index, name ->
+      handle_trigger(ref, duration, acc, index, name, reducer_acc, reducer_trigger)
     end
 
     {acc, fun, trigger}
@@ -157,20 +152,20 @@ defmodule Flow.Window.Fixed do
     emit_trigger_messages(old + 1, new, windows, index, lateness, emit ++ new_emit)
   end
 
-  defp lateness_fun({lateness, op}, duration, ref, reducer_acc, reducer_trigger) do
+  defp lateness_fun(lateness, duration, ref, reducer_acc, reducer_trigger) do
     fn window, windows, index ->
       acc = Map.get_lazy(windows, window, reducer_acc)
 
       case lateness do
         0 ->
-          {emit, _} = reducer_trigger.(acc, index, :keep, {:fixed, window * duration, :done})
+          {emit, _} = reducer_trigger.(acc, index, {:fixed, window * duration, :done})
           {emit, Map.delete(windows, window)}
 
         _ ->
-          Process.send_after(self(), {:trigger, :keep, {ref, window}}, lateness)
+          Process.send_after(self(), {:trigger, {ref, window}}, lateness)
 
           {emit, window_acc} =
-            reducer_trigger.(acc, index, op, {:fixed, window * duration, :watermark})
+            reducer_trigger.(acc, index, {:fixed, window * duration, :watermark})
 
           {emit, Map.put(windows, window, window_acc)}
       end
@@ -180,10 +175,10 @@ defmodule Flow.Window.Fixed do
   ## Trigger handling
 
   # Lateness termination.
-  def handle_trigger(ref, duration, {current, windows}, index, op, {ref, window}, _acc, trigger) do
+  def handle_trigger(ref, duration, {current, windows}, index, {ref, window}, _acc, trigger) do
     case windows do
       %{^window => acc} ->
-        {emit, _window_acc} = trigger.(acc, index, op, {:fixed, window * duration, :done})
+        {emit, _window_acc} = trigger.(acc, index, {:fixed, window * duration, :done})
         {emit, {current, Map.delete(windows, window)}}
 
       %{} ->
@@ -192,26 +187,26 @@ defmodule Flow.Window.Fixed do
   end
 
   # Otherwise trigger all windows.
-  def handle_trigger(_ref, _duration, {current, windows}, _index, _op, _name, _acc, _trigger)
+  def handle_trigger(_ref, _duration, {current, windows}, _index, _name, _acc, _trigger)
       when map_size(windows) == 0 do
     {[], {current, windows}}
   end
 
-  def handle_trigger(_ref, duration, {current, windows}, index, op, name, acc, trigger) do
+  def handle_trigger(_ref, duration, {current, windows}, index, name, acc, trigger) do
     {min, max} = windows |> Map.keys() |> Enum.min_max()
-    {emit, windows} = trigger_all(min, max, duration, windows, index, op, name, acc, trigger, [])
+    {emit, windows} = trigger_all(min, max, duration, windows, index, name, acc, trigger, [])
     {emit, {current, windows}}
   end
 
-  defp trigger_all(min, max, _duration, windows, _index, _op, _name, _acc, _trigger, emit)
+  defp trigger_all(min, max, _duration, windows, _index, _name, _acc, _trigger, emit)
        when min > max do
     {emit, windows}
   end
 
-  defp trigger_all(min, max, duration, windows, index, op, name, acc, trigger, emit) do
+  defp trigger_all(min, max, duration, windows, index, name, acc, trigger, emit) do
     window_acc = Map.get_lazy(windows, min, acc)
-    {new_emit, window_acc} = trigger.(window_acc, index, op, {:fixed, min * duration, name})
+    {new_emit, window_acc} = trigger.(window_acc, index, {:fixed, min * duration, name})
     windows = Map.put(windows, min, window_acc)
-    trigger_all(min + 1, max, duration, windows, index, op, name, acc, trigger, emit ++ new_emit)
+    trigger_all(min + 1, max, duration, windows, index, name, acc, trigger, emit ++ new_emit)
   end
 end

@@ -85,17 +85,8 @@ defmodule Flow.Window do
   `trigger_periodically/4` and `trigger/3` respectively.
 
   Once a trigger is emitted, the `reduce/3` step halts and invokes
-  the remaining steps for that flow such as `map_state/2` or any other
-  call after `reduce/3`. Triggers are also named and the trigger names
-  will be sent alongside the window name as third argument to the callback
-  given to `map_state/2` and `each_state/2`.
-
-  For every emitted trigger, developers have the choice of either
-  resetting the reducer accumulator (`:reset`) or keeping it as is (`:keep`).
-  The resetting option is useful when you are interested only on intermediate
-  results, usually because another step is aggregating the data. Keeping the
-  accumulator is the default and used to checkpoint the values while still
-  working towards an end result.
+  the `on_trigger/2` callback, allowing you to emit events and change
+  the reducer accumulator.
 
   ### Event time and processing time
 
@@ -209,11 +200,12 @@ defmodule Flow.Window do
   twice. Instead of the window being marked as done when 1 hour passes,
   we say it emits a **watermark trigger**. The window will be effectively
   done only after the allowed lateness period. If desired, we can use
-  `Flow.map_state/2` to get more information about each particular window
+  `Flow.on_trigger/2` to get more information about each particular window
   and its trigger. Replace the last line above by the following:
 
-      flow = flow |> Flow.map_state(fn state, _index, trigger -> {state, trigger} end)
-      flow = flow |> Flow.emit(:state) |> Enum.to_list()
+      flow
+      |> Flow.on_trigger(fn state, _index, trigger -> {[{state, trigger}], state} end)
+      |> Enum.to_list()
 
   The trigger parameter will include the type of window, the current
   window and what caused the window to be emitted (`:watermark` or
@@ -253,44 +245,6 @@ defmodule Flow.Window do
   callback per trigger but the `done` callback per window.  Unless you are
   relying on functions such as `Flow.departition/4`, there is no distinction
   between count windows and global windows with count triggers.
-
-  ## Session windows (event time)
-
-  Session windows are useful for data that is irregularly distributed with
-  respect to time. For example, GPS data contains moments of user activity
-  with long periods of user inactivity. Sessions allows us to group these
-  events together until there is a time gap between them.
-
-  Session windows by definition belong to a single key. Therefore, the :key
-  option must be given to the partition alongside the window option. For
-  instance, in case of GPS data, the key would be the `device_id` or the
-  `user_id`.
-
-  To build on this example, imagine we want to calculate the distance
-  travelled by a user on certain trips based on GPS data. Let's assume the
-  movement happens on a one-dimensional line for simplicity. Our server
-  will receive streaming data from different users in the shape of:
-
-      {user_id, position, time_in_seconds}
-
-  Our code is going to calculate the location per user per trip based on
-  time inactivity:
-
-      iex> data = [{1, 32, 0}, {1, 35, 60}, {1, 40, 120},       # user 1 - trip 1
-      ...>         {2, 45, 60}, {2, 43, 70}, {2, 47, 200},      # user 2 - trip 1
-      ...>         {1, 40, 3600}, {1, 43, 3700}, {1, 50, 4000}] # user 1 - trip 2
-      iex> key = fn {user_id, _position, _time} -> user_id end  # Partition per user
-      iex> window = Flow.Window.session(20, :minute, fn {_user_id, _position, time} -> time * 1000 end)
-      iex> flow = Flow.from_enumerable(data) |> Flow.partition(key: key, window: window)
-      iex> flow = Flow.reduce(flow, fn -> :empty end, fn
-      ...>   {_, pos, _}, :empty -> {pos, 0} # initial point and distance
-      ...>   {_, pos, _}, {last, distance} -> {pos, abs(pos - last) + distance}
-      ...> end)
-      iex> flow = Flow.map_state(flow, fn {_, distance}, _partition, {:session, {user_id, start, last}, :done} ->
-      ...>   {user_id, distance, div(last - start, 1000)} # user_id travelled total in last - start seconds
-      ...> end)
-      iex> flow |> Flow.emit(:state) |> Enum.sort()
-      [{1, 8, 120}, {1, 10, 400}, {2, 6, 140}]
   """
 
   @type t :: %{required(:trigger) => {fun(), fun()} | nil, required(:periodically) => []}
@@ -310,18 +264,13 @@ defmodule Flow.Window do
   @typedoc """
   The window identifier.
 
-  It is `:global` for `:global` windows. An integer for fixed
-  windows and a custom value for session windows.
+  It is `:global` for `:global` windows or
+  an integer for fixed windows.
   """
-  @type id :: :global | non_neg_integer() | term()
+  @type id :: :global | non_neg_integer()
 
   @typedoc "The name of the trigger."
   @type trigger :: term
-
-  @typedoc "The operation to perform on the accumulator."
-  @type accumulator :: :keep | :reset
-
-  @trigger_operation [:keep, :reset]
 
   @doc """
   Returns a global window.
@@ -392,22 +341,10 @@ defmodule Flow.Window do
     %Flow.Window.Fixed{duration: to_ms(count, unit), by: by}
   end
 
-  @doc """
-  Returns a session window that works on gaps given by `count` `unit` and
-  the event time is calculated by the given function `by`.
-
-  `count` is a positive integer and `unit` is one of `:millisecond`,
-  `:second`, `:minute`, `:hour`.
-
-  Session window triggers have the shape of
-  `{:session, {key, first_time, last_time}, trigger_name}`, where `key`
-  is the window key, the `first_time` in the session and the `last_time`
-  on the session thus far.
-
-  See the section on "Session windows" in the module documentation for examples.
-  """
+  @doc false
   @spec session(pos_integer, System.time_unit(), (t -> pos_integer)) :: t
   def session(count, unit, by) when is_integer(count) and count > 0 and is_function(by, 1) do
+    IO.warn("session windows are deprecated in favor of emit_and_reduce/3 and on_trigger/2")
     %Flow.Window.Session{gap: to_ms(count, unit), by: by}
   end
 
@@ -417,23 +354,21 @@ defmodule Flow.Window do
 
   If allowed lateness is configured, once the window is finished,
   it won't trigger a `:done` event but instead emit a `:watermark`.
-  The `keep_or_reset` option can configure if the state should be
-  kept or reset when the watermark is triggered. The window will
-  be done only when the allowed lateness time expires, effectively
-  emitting the `:done` trigger.
+  The window will be done only when the allowed lateness time expires,
+  effectively emitting the `:done` trigger.
 
   `count` is a positive number. The `unit` may be a time unit
   (`:second`, `:millisecond`, `:second`, `:minute` and `:hour`).
   """
-  @spec allowed_lateness(t, pos_integer, System.time_unit(), :keep | :reset) :: t
-  def allowed_lateness(window, count, unit, keep_or_reset \\ :keep)
+  @spec allowed_lateness(t, pos_integer, System.time_unit()) :: t
+  def allowed_lateness(window, count, unit)
 
-  def allowed_lateness(%{lateness: _} = window, count, unit, keep_or_reset) do
-    %{window | lateness: {to_ms(count, unit), keep_or_reset}}
+  def allowed_lateness(%{lateness: _} = window, count, unit) do
+    %{window | lateness: to_ms(count, unit)}
   end
 
-  def allowed_lateness(window, _, _, _) do
-    raise ArgumentError, "allowed_lateness/4 not supported for window type #{inspect(window)}"
+  def allowed_lateness(window, _, _) do
+    raise ArgumentError, "allowed_lateness/3 not supported for window type #{inspect(window)}"
   end
 
   @doc """
@@ -456,11 +391,10 @@ defmodule Flow.Window do
        only with the events you want to emit as part of the next state.
        `acc` is the trigger state.
 
-    * `{:trigger, name, pre, operation, pos, acc}` - where `name` is the
+    * `{:trigger, name, pre, pos, acc}` - where `name` is the
       trigger `name`, `pre` are the events to be consumed before the trigger,
-      the `operation` configures the stage should `:keep` the reduce accumulator
-      or `:reset` it. `pos` controls events to be processed after the trigger
-      with the `acc` as the new trigger accumulator.
+      `pos` controls events to be processed after the trigger with the `acc`
+      as the new trigger accumulator.
 
   We recommend looking at the implementation of `trigger_every/3` as
   an example of a custom trigger.
@@ -470,7 +404,7 @@ defmodule Flow.Window do
              trigger_fun_return: cont_tuple | cont_tuple_with_emitted_events | trigger_tuple,
              cont_tuple: {:cont, acc},
              cont_tuple_with_emitted_events: {:cont, [event], acc},
-             trigger_tuple: {:trigger, trigger(), pre, accumulator(), pos, acc},
+             trigger_tuple: {:trigger, trigger(), pre, pos, acc},
              pre: [event],
              pos: [event],
              acc: term(),
@@ -487,10 +421,6 @@ defmodule Flow.Window do
   @doc """
   A trigger emitted every `count` elements in a window.
 
-  The `keep_or_reset` argument must be one of `:keep` or `:reset`.
-  If `:keep`, the state accumulated so far on `reduce/3` will be kept,
-  otherwise discarded.
-
   The trigger will be named `{:every, count}`.
 
   ## Examples
@@ -504,18 +434,9 @@ defmodule Flow.Window do
       iex> flow |> Flow.reduce(fn -> 0 end, &(&1 + &2)) |> Flow.emit(:state) |> Enum.to_list()
       [55, 210, 465, 820, 1275, 1830, 2485, 3240, 4095, 5050, 5050]
 
-  Now let's see an example similar to above except we reset the counter
-  on every trigger. At the end, the sum of all values is still 5050:
-
-      iex> window = Flow.Window.global() |> Flow.Window.trigger_every(10, :reset)
-      iex> flow = Flow.from_enumerable(1..100) |> Flow.partition(window: window, stages: 1)
-      iex> flow |> Flow.reduce(fn -> 0 end, &(&1 + &2)) |> Flow.emit(:state) |> Enum.to_list()
-      [55, 155, 255, 355, 455, 555, 655, 755, 855, 955, 0]
-
   """
-  @spec trigger_every(t, pos_integer, :keep | :reset) :: t
-  def trigger_every(window, count, keep_or_reset \\ :keep)
-      when is_integer(count) and count > 0 and keep_or_reset in @trigger_operation do
+  @spec trigger_every(t, pos_integer) :: t
+  def trigger_every(window, count) when is_integer(count) and count > 0 do
     name = {:every, count}
 
     trigger(window, fn -> count end, fn events, acc ->
@@ -523,7 +444,7 @@ defmodule Flow.Window do
 
       if length(events) >= acc do
         {pre, pos} = Enum.split(events, acc)
-        {:trigger, name, pre, keep_or_reset, pos, count}
+        {:trigger, name, pre, pos, count}
       else
         {:cont, acc - length}
       end
@@ -542,34 +463,22 @@ defmodule Flow.Window do
   triggers at different times and possibly with delays based on the partition
   message queue size.
 
-  The `keep_or_reset` argument must be one of `:keep` or `:reset`. If
-  `:keep`, the state accumulate so far on `reduce/3` will be kept, otherwise
-  discarded.
-
   The trigger will be named `{:periodically, count, unit}`.
 
   ## Message-based triggers (timers)
 
   It is also possible to dispatch a trigger by sending a message to
-  `self()` with the format of `{:trigger, :keep | :reset, name}`.
-  This is useful for custom triggers and timers. One example is to
-  send the message when building the accumulator for `reduce/3`.
-  If `:reset` is used, every time the accumulator is rebuilt, a new
-  message will be sent. If `:keep` is used and a new timer is necessary,
-  then `each_state/2` can be called after `reduce/3` to resend it.
+  `self()` with the format of `{:trigger, name}`. This is useful for
+  custom triggers and timers. One example is to send the message when
+  building the accumulator for `reduce/3`.
 
   Similar to periodic triggers, message-based triggers will also be
   invoked to all windows that have changed since the last trigger.
   """
-  @spec trigger_periodically(t, pos_integer, System.time_unit(), :keep | :reset) :: t
-  def trigger_periodically(
-        %{periodically: periodically} = window,
-        count,
-        unit,
-        keep_or_reset \\ :keep
-      )
+  @spec trigger_periodically(t, pos_integer, System.time_unit()) :: t
+  def trigger_periodically(%{periodically: periodically} = window, count, unit)
       when is_integer(count) and count > 0 do
-    trigger = {to_ms(count, unit), keep_or_reset, {:periodically, count, unit}}
+    trigger = {to_ms(count, unit), {:periodically, count, unit}}
     %{window | periodically: [trigger | periodically]}
   end
 

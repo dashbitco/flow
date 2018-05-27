@@ -1,19 +1,19 @@
-defmodule Flow.Window.Test do
+defmodule Flow.WindowTest do
   use ExUnit.Case, async: true
   doctest Flow.Window
 
   test "periodic triggers" do
     assert Flow.Window.global()
-           |> Flow.Window.trigger_periodically(10, :second, :keep)
-           |> Map.fetch!(:periodically) == [{10000, :keep, {:periodically, 10, :second}}]
+           |> Flow.Window.trigger_periodically(10, :second)
+           |> Map.fetch!(:periodically) == [{10000, {:periodically, 10, :second}}]
 
     assert Flow.Window.global()
-           |> Flow.Window.trigger_periodically(10, :minute, :keep)
-           |> Map.fetch!(:periodically) == [{600_000, :keep, {:periodically, 10, :minute}}]
+           |> Flow.Window.trigger_periodically(10, :minute)
+           |> Map.fetch!(:periodically) == [{600_000, {:periodically, 10, :minute}}]
 
     assert Flow.Window.global()
-           |> Flow.Window.trigger_periodically(10, :hour, :keep)
-           |> Map.fetch!(:periodically) == [{36_000_000, :keep, {:periodically, 10, :hour}}]
+           |> Flow.Window.trigger_periodically(10, :hour)
+           |> Map.fetch!(:periodically) == [{36_000_000, {:periodically, 10, :hour}}]
   end
 
   describe "custom trigger w/ :cont, emitted events and no emitted events" do
@@ -22,11 +22,14 @@ defmodule Flow.Window.Test do
         Flow.from_enumerables([[:a, :b, :c], [:a, :b, :c]], stages: 1)
         |> Flow.partition(window: window, stages: 1)
         |> Flow.reduce(fn -> [] end, &[&1 | &2])
-        |> Flow.each_state(&send(parent, Enum.sort(&1)))
+        |> Flow.on_trigger(fn state ->
+          send(parent, Enum.sort(state))
+          {[], []}
+        end)
         |> Flow.start_link()
       end
 
-      moving_event_trigger = fn window, count, emitted, keep_or_reset ->
+      moving_event_trigger = fn window, count, emitted ->
         name = {:moving_event_trigger, count}
 
         Flow.Window.trigger(window, fn -> [] end, fn events, acc ->
@@ -35,7 +38,7 @@ defmodule Flow.Window.Test do
           if length(new_acc) >= count do
             pre = Enum.take(new_acc, count)
             pos = Enum.drop(new_acc, 1)
-            {:trigger, name, pre, keep_or_reset, pos, []}
+            {:trigger, name, pre, pos, []}
           else
             {:cont, emitted, new_acc}
           end
@@ -45,9 +48,8 @@ defmodule Flow.Window.Test do
       [flow: flow, trigger: moving_event_trigger]
     end
 
-    @tag :custom_trigger
     test "skip on :cont w/ reset", context do
-      window = Flow.Window.global() |> context[:trigger].(2, [], :reset)
+      window = Flow.Window.global() |> context[:trigger].(2, [])
       {:ok, pid} = context[:flow].(window, self())
 
       assert_receive [:a, :b]
@@ -62,9 +64,8 @@ defmodule Flow.Window.Test do
       assert_receive {:DOWN, ^ref, _, _, _}
     end
 
-    @tag :custom_trigger
     test "emit on :cont w/ reset", context do
-      window = Flow.Window.global() |> context[:trigger].(2, [:elixir], :reset)
+      window = Flow.Window.global() |> context[:trigger].(2, [:elixir])
       {:ok, pid} = context[:flow].(window, self())
 
       assert_receive [:a, :b]

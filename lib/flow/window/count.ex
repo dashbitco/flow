@@ -4,10 +4,6 @@ defmodule Flow.Window.Count do
   @enforce_keys [:count]
   defstruct [:count, :trigger, periodically: []]
 
-  def departition(flow) do
-    flow
-  end
-
   def materialize(%{count: max}, reducer_acc, reducer_fun, reducer_trigger, _options) do
     acc = fn -> {0, max, reducer_acc.()} end
 
@@ -27,8 +23,8 @@ defmodule Flow.Window.Count do
       )
     end
 
-    trigger = fn {window, count, acc}, index, op, name ->
-      {emit, acc} = reducer_trigger.(acc, index, op, {:count, window, name})
+    trigger = fn {window, count, acc}, index, name ->
+      {emit, acc} = reducer_trigger.(acc, index, {:count, window, name})
       {emit, {window, count, acc}}
     end
 
@@ -86,7 +82,7 @@ defmodule Flow.Window.Count do
   end
 
   defp maybe_trigger(window, 0, acc, index, max, reducer_acc, reducer_trigger) do
-    {trigger_emit, _} = reducer_trigger.(acc, index, :keep, {:count, window, :done})
+    {trigger_emit, _} = reducer_trigger.(acc, index, {:count, window, :done})
     {trigger_emit, reducer_acc.(), window + 1, max}
   end
 

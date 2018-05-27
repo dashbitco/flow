@@ -41,20 +41,20 @@ defmodule Flow.Window.CountTest do
 
     test "trigger discard with large demand" do
       partition_opts = [
-        window: single_window() |> Flow.Window.trigger_every(10, :reset),
+        window: single_window() |> Flow.Window.trigger_every(10),
         stages: 1
       ]
 
       assert Flow.from_enumerable(1..100)
              |> Flow.partition(partition_opts)
              |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[&1], 0})
              |> Enum.to_list() == [55, 155, 255, 355, 455, 555, 655, 755, 855, 955, 0]
     end
 
     test "trigger discard with small demand" do
       partition_opts = [
-        window: single_window() |> Flow.Window.trigger_every(10, :reset),
+        window: single_window() |> Flow.Window.trigger_every(10),
         stages: 1,
         max_demand: 5
       ]
@@ -62,7 +62,7 @@ defmodule Flow.Window.CountTest do
       assert Flow.from_enumerable(1..100)
              |> Flow.partition(partition_opts)
              |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[&1], 0})
              |> Enum.to_list() == [55, 155, 255, 355, 455, 555, 655, 755, 855, 955, 0]
     end
 
@@ -83,7 +83,7 @@ defmodule Flow.Window.CountTest do
 
     test "trigger names" do
       partition_opts = [
-        window: single_window() |> Flow.Window.trigger_every(10, :reset),
+        window: single_window() |> Flow.Window.trigger_every(10),
         stages: 1
       ]
 
@@ -91,8 +91,7 @@ defmodule Flow.Window.CountTest do
         Flow.from_enumerable(1..100)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:count, 0, trigger} -> {trigger, state} end)
-        |> Flow.emit(:state)
+        |> Flow.on_trigger(fn state, _, {:count, 0, trigger} -> {[{trigger, state}], 0} end)
         |> Enum.sort()
 
       assert events == [
@@ -121,23 +120,21 @@ defmodule Flow.Window.CountTest do
              |> Flow.from_enumerable(max_demand: 5, stages: 2)
              |> Flow.partition(partition_opts)
              |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-             |> Flow.map_state(&(&1 * 2))
-             |> Flow.emit(:state)
+             |> Flow.on_trigger(&{[&1 * 2], &1})
              |> Enum.take(1) == [110]
     end
 
     test "trigger based on timers" do
-      reduce_fn = fn ->
-        Process.send_after(self(), {:trigger, :reset, :sample}, 200)
+      reduce_fun = fn ->
+        Process.send_after(self(), {:trigger, :sample}, 200)
         0
       end
 
       assert Stream.concat(1..10, Stream.timer(:infinity))
              |> Flow.from_enumerable(max_demand: 5, stages: 2)
              |> Flow.partition(stages: 1, max_demand: 10, window: single_window())
-             |> Flow.reduce(reduce_fn, &(&1 + &2))
-             |> Flow.map_state(&{&1 * 2, &2, &3})
-             |> Flow.emit(:state)
+             |> Flow.reduce(reduce_fun, &(&1 + &2))
+             |> Flow.on_trigger(&{[{&1 * 2, &2, &3}], reduce_fun.()})
              |> Enum.take(1) == [{110, {0, 1}, {:count, 0, :sample}}]
     end
   end
@@ -165,7 +162,9 @@ defmodule Flow.Window.CountTest do
         Flow.from_enumerable(1..100, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:count, count, trigger} -> [{state, count, trigger}] end)
+        |> Flow.on_trigger(fn state, _, {:count, count, trigger} ->
+          {[{state, count, trigger}], state}
+        end)
         |> Enum.to_list()
 
       assert events == [
@@ -205,7 +204,9 @@ defmodule Flow.Window.CountTest do
         Flow.from_enumerable(1..100, stages: 1)
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.map_state(fn state, _, {:count, count, trigger} -> [{state, count, trigger}] end)
+        |> Flow.on_trigger(fn state, _, {:count, count, trigger} ->
+          {[{state, count, trigger}], state}
+        end)
         |> Enum.to_list()
 
       assert events == [

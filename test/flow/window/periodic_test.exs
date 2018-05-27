@@ -11,8 +11,9 @@ defmodule Flow.Window.PeriodicTest do
       |> Flow.from_enumerable(max_demand: 5)
       |> Flow.partition(window: single_window(), stages: 1, max_demand: 10)
       |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-      |> Flow.map_state(fn state, index, {:periodic, window, :done} -> {state, index, window} end)
-      |> Flow.emit(:state)
+      |> Flow.on_trigger(fn state, index, {:periodic, window, :done} ->
+        {[{state, index, window}], state}
+      end)
       |> Enum.take(2)
 
     assert result == [{55, {0, 1}, 0}, {0, {0, 1}, 1}]
@@ -30,8 +31,9 @@ defmodule Flow.Window.PeriodicTest do
       |> Flow.from_enumerable(max_demand: 5, stages: 2)
       |> Flow.partition(partition_opts)
       |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-      |> Flow.map_state(fn state, _, {:periodic, window, trigger} -> {state, window, trigger} end)
-      |> Flow.emit(:state)
+      |> Flow.on_trigger(fn state, _, {:periodic, window, trigger} ->
+        {[{state, window, trigger}], state}
+      end)
       |> Enum.take(3)
 
     assert result == [{15, 0, {:every, 5}}, {55, 0, {:every, 5}}, {55, 0, :done}]

@@ -4,10 +4,6 @@ defmodule Flow.Window.Periodic do
   @enforce_keys [:duration]
   defstruct [:duration, :trigger, periodically: []]
 
-  def departition(flow) do
-    flow
-  end
-
   def materialize(%{duration: duration}, reducer_acc, reducer_fun, reducer_trigger, _options) do
     ref = make_ref()
 
@@ -30,14 +26,14 @@ defmodule Flow.Window.Periodic do
       end
 
     trigger = fn
-      {window, _timer, acc}, index, op, ^ref ->
-        {emit, _} = reducer_trigger.(acc, index, op, {:periodic, window, :done})
+      {window, _timer, acc}, index, ^ref ->
+        {emit, _} = reducer_trigger.(acc, index, {:periodic, window, :done})
         timer = send_after(ref, duration)
         {emit, {window + 1, timer, reducer_acc.()}}
 
-      {window, timer, acc}, index, op, name ->
+      {window, timer, acc}, index, name ->
         if name == :done, do: cancel_after(ref, timer)
-        {emit, acc} = reducer_trigger.(acc, index, op, {:periodic, window, name})
+        {emit, acc} = reducer_trigger.(acc, index, {:periodic, window, name})
         {emit, {window, timer, acc}}
     end
 
@@ -45,14 +41,14 @@ defmodule Flow.Window.Periodic do
   end
 
   defp send_after(ref, duration) do
-    Process.send_after(self(), {:trigger, :keep, ref}, duration)
+    Process.send_after(self(), {:trigger, ref}, duration)
   end
 
   defp cancel_after(ref, timer) do
     case Process.cancel_timer(timer) do
       false ->
         receive do
-          {:trigger, :keep, ^ref} -> :ok
+          {:trigger, ^ref} -> :ok
         after
           0 -> :ok
         end
