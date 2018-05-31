@@ -31,6 +31,22 @@ defmodule FlowTest do
     end
   end
 
+  describe "on use" do
+    if Code.ensure_loaded?(Supervisor) and function_exported?(Supervisor, :init, 2) do
+      test "defines a child_spec/2 function" do
+        defmodule MyFlow do
+          use Flow, shutdown: 1000
+        end
+
+        assert MyFlow.child_spec(:ok) == %{
+                 id: FlowTest.MyFlow,
+                 shutdown: 1000,
+                 start: {FlowTest.MyFlow, :start_link, [:ok]}
+               }
+      end
+    end
+  end
+
   describe "errors" do
     test "on multiple reduce calls" do
       message = ~r"cannot call group_by/reduce/emit_and_reduce on a flow after another"
@@ -180,6 +196,15 @@ defmodule FlowTest do
       assert_receive {:DOWN, ^ref, _, _, _}
     end
 
+    test "start_link/2 with :name", config do
+      {:ok, pid} =
+        @flow
+        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.start_link(name: config.test)
+
+      assert Process.whereis(config.test) == pid
+    end
+
     test "into_stages/3" do
       {:ok, forwarder} = GenStage.start_link(Forwarder, self())
 
@@ -193,6 +218,17 @@ defmodule FlowTest do
 
       ref = Process.monitor(pid)
       assert_receive {:DOWN, ^ref, _, _, _}
+    end
+
+    test "into_stages/3 with :name", config do
+      {:ok, forwarder} = GenStage.start_link(Forwarder, self())
+
+      {:ok, pid} =
+        @flow
+        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.into_stages([forwarder], name: config.test)
+
+      assert Process.whereis(config.test) == pid
     end
   end
 
@@ -308,6 +344,15 @@ defmodule FlowTest do
       assert_receive {:DOWN, ^ref, _, _, _}
     end
 
+    test "start_link/2 with :name", config do
+      {:ok, pid} =
+        @flow
+        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.start_link(name: config.test)
+
+      assert Process.whereis(config.test) == pid
+    end
+
     test "into_stages/3" do
       {:ok, forwarder} = GenStage.start_link(Forwarder, self())
 
@@ -318,6 +363,17 @@ defmodule FlowTest do
 
       assert_receive {:consumed, [2]}
       assert_receive {:consumed, [4, 6]}
+    end
+
+    test "into_stages/3 with :name", config do
+      {:ok, forwarder} = GenStage.start_link(Forwarder, self())
+
+      {:ok, pid} =
+        @flow
+        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.into_stages([forwarder], name: config.test)
+
+      assert Process.whereis(config.test) == pid
     end
   end
 
@@ -463,6 +519,15 @@ defmodule FlowTest do
       assert_receive {:DOWN, ^ref, _, _, _}
     end
 
+    test "start_link/2 with :name", config do
+      {:ok, pid} =
+        @flow
+        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.start_link(name: config.test)
+
+      assert Process.whereis(config.test) == pid
+    end
+
     test "into_stages/3" do
       {:ok, forwarder} = GenStage.start_link(Forwarder, self())
 
@@ -476,6 +541,17 @@ defmodule FlowTest do
       assert_receive {:consumed, [6]}
       assert_receive {:consumed, '\b'}
       assert_receive {:consumed, '\n'}
+    end
+
+    test "into_stages/3 with :name", config do
+      {:ok, forwarder} = GenStage.start_link(Forwarder, self())
+
+      {:ok, pid} =
+        @flow
+        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.into_stages([forwarder], name: config.test)
+
+      assert Process.whereis(config.test) == pid
     end
   end
 

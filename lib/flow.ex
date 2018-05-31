@@ -311,6 +311,25 @@ defmodule Flow do
   `Flow.into_stages/3` can also be used to start the flow as a
   linked process which will send the events to the given consumers.
 
+  Since Elixir v1.5, the easiest way to add Flow to your supervision
+  tree is by calling `use Flow` and then defining a `start_link/1`
+  function that calls either `Flow.start_link/2` or `Flow.into_stages/3`:
+
+      defmodule MyFlow do
+        use Flow
+
+        def start_link(_) do
+          Flow.from_stages(...)
+          |> ...
+          |> ...
+          |> ...
+          |> Flow.start_link()
+        end
+      end
+
+  The `:shutdown` and `:restart` child spec configurations can be given to
+  `use Flow`.
+
   ## Performance discussions
 
   In this section we will discuss points related to performance
@@ -443,6 +462,25 @@ defmodule Flow do
            | {:reduce, fun(), fun()}
            | {:emit_and_reduce, fun(), fun()}
            | {:on_trigger, fun()}
+
+  @doc false
+  defmacro __using__(opts) do
+    quote location: :keep, bind_quoted: [opts: opts] do
+      if Code.ensure_loaded?(Supervisor) and function_exported?(Supervisor, :init, 2) do
+        @doc false
+        def child_spec(arg) do
+          default = %{
+            id: __MODULE__,
+            start: {__MODULE__, :start_link, [arg]}
+          }
+
+          Supervisor.child_spec(default, unquote(Macro.escape(opts)))
+        end
+
+        defoverridable child_spec: 1
+      end
+    end
+  end
 
   ## Building
 
@@ -766,9 +804,7 @@ defmodule Flow do
 
   ## Options
 
-    * `:dispatcher` - the dispatcher responsible for handling demands.
-      Defaults to `GenStage.DemandDispatch`. May be either an atom or
-      a tuple with the dispatcher and the dispatcher options.
+    * `:name` - the name of the flow
 
     * `:demand` - configures the demand on the flow producers to `:forward`
       or `:accumulate`. The default is `:forward`. See `GenStage.demand/2`
@@ -809,7 +845,11 @@ defmodule Flow do
 
   ## Options
 
-  This function receives the same options as `start_link/2`.
+  This function receives the same options as `start_link/2` with
+  the addition of a `:dispatcher` option responsible for handling
+  demands that defaults to `GenStage.DemandDispatch`. It may be
+  either an atom or a tuple with the dispatcher and the dispatcher
+  options.
   """
   @spec into_stages(t, consumers, keyword()) :: GenServer.on_start()
         when consumers: [GenStage.stage() | {GenStage.stage(), keyword()}]
