@@ -32,18 +32,16 @@ defmodule FlowTest do
   end
 
   describe "on use" do
-    if Code.ensure_loaded?(Supervisor) and function_exported?(Supervisor, :init, 2) do
-      test "defines a child_spec/2 function" do
-        defmodule MyFlow do
-          use Flow, shutdown: 1000
-        end
-
-        assert MyFlow.child_spec(:ok) == %{
-                 id: FlowTest.MyFlow,
-                 shutdown: 1000,
-                 start: {FlowTest.MyFlow, :start_link, [:ok]}
-               }
+    test "defines a child_spec/2 function" do
+      defmodule MyFlow do
+        use Flow, shutdown: 1000
       end
+
+      assert MyFlow.child_spec(:ok) == %{
+               id: FlowTest.MyFlow,
+               shutdown: 1000,
+               start: {FlowTest.MyFlow, :start_link, [:ok]}
+             }
     end
   end
 

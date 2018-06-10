@@ -1,13 +1,13 @@
 defmodule Flow.Mixfile do
   use Mix.Project
 
-  @version "0.13.0"
+  @version "0.14.0"
 
   def project do
     [
       app: :flow,
       version: @version,
-      elixir: "~> 1.3",
+      elixir: "~> 1.5",
       package: package(),
       description: "Computational parallel flows for Elixir",
       build_embedded: Mix.env() == :prod,
@@ -27,7 +27,7 @@ defmodule Flow.Mixfile do
 
   defp deps do
     [
-      {:gen_stage, "~> 0.13.0"},
+      {:gen_stage, "~> 0.14.0"},
       {:ex_doc, "~> 0.12", only: :docs},
       {:inch_ex, ">= 0.4.0", only: :docs}
     ]

@@ -1,35 +1,51 @@
 # Changelog
 
-## v0.14.0-dev
+## v0.14.0 (2018-06-10)
 
-Flow is inspired on three technologies:
+This release includes a redesign of how triggers and the reducing accumulator works.
 
-  * GenStage - built on Elixir and provides the foundation for Flow
-  * Apache Spark - the inspiration for most of the API in the `Flow` module
-  * Apache BEAM - the model we used for windows and triggers seen in `Flow.Window`
+Prior to this version, the `Flow` module was responsible for traversing events in the mapper stage and to accumulate the state in reducing stages. When working with unbound data, the `Flow.Window` was used to control exactly when to emit data from the reducing stages and when to reset the partition state.
 
-Prior to this version, the `Flow` module was responsible for traversing events in the mapper stage and to accumulate the state in reducing stages. When working with unbound data, the `Flow.Window` was used to control exactly when to emit data from the reducing stages.
-
-This approach meant that understanding what happens with a partition state was hard to understand, as it was spread over the flow and window definitions. To make matters worse, if you wanted to have your own rules for emitting events, such as user session or sliding windows, it was only possible to achieve it via custom window implementations.
+This approach meant that understanding which data is emitted and when the state was reset was hard because the logic was spread in multiple places. To make matters worse, if you wanted to have your own rules for emitting events, such as user session or sliding windows, it was only possible to achieve it via custom window implementations.
 
 This design limitation caused many users to drop Flow and use GenStage, as GenStage provides the necessary abstractions for tackling those problems. However, since Flow is built on top of GenStage, why not expose it directly through Flow? That's what v0.14.0 does.
 
 v0.14.0 introduces two new functions: `emit_and_reduce/3` and `on_trigger/2` which gives developers explicit control of when to emit data. The `on_trigger/2` function also allows developers to fully control the state that is kept in the reducing stage after the trigger.
 
-Unfortunately this change is incompatible (or rather, fully replaces) w functionalities:
+Unfortunately this change is incompatible (or rather, fully replaces) the following functionalities:
 
   * `each_state/2` and `map_state/2` - those two functions were only invoked when there was a trigger and they have now been replaced by a more explicitly named `on_trigger/2` function
 
   * The `:keep` and `:reset` argument to windows and triggers have been removed as you control the behaviour on `on_trigger/2`
 
+For example, if you used `map_state/2` (or `each_state/2`) and a `:reset` trigger, like this:
+
+    |> Flow.map_state(fn acc -> do_something(acc) end)
+
+You can now replace this code by:
+
+    |> Flow.on_trigger(fn acc -> {do_something(acc), []} end)
+
+Where the first element of the tuple reeturned by `on_trigger` is the data to emit and the second element is the new accumulator of the reducer stage. Similarly, if you were using `map_state/2` (or `each_state/2`) and a `:keep` trigger, like this:
+
+    |> Flow.map_state(fn acc -> do_something(acc) end)
+
+You can now replace this code by:
+
+    |> Flow.on_trigger(fn acc -> {do_something(acc), acc} end)
+
+Note that `on_trigger/2` can only be called once per partition. In case you were calling `map_state/2` and `each_state/2` multiple times, you can simply inline all calls inside the same `on_trigger/2`.
+
 We believe `emit_and_reduce/3` and `on_trigger/2` provide a conceptually simpler module to reason about flows while being more powerful.
 
-This release also deprecates `Flow.Window.session/3` as developers trivially roll their own with more customization power and flexibility using `emit_and_reduce/3` and `on_trigger/2`.
+This release also deprecates `Flow.Window.session/3` as developers can trivially roll their own with more customization power and flexibility using `emit_and_reduce/3` and `on_trigger/2`.
 
-### Summary
+### Notes
 
   * Enhancements
+    * `use Flow` now defines a `child_spec/1` to be used under supervision
     * Added `emit_and_reduce/3` and `on_trigger/2`
+    * Use `DemandDispatcher` when there is one stage in partition
 
   * Deprecations
     * Session windows are deprecated in favor of `Flow.emit_and_reduce/3` and `Flow.on_trigger/2`
