@@ -1,6 +1,6 @@
 # Flow
 
-`Flow` allows developers to express computations on collections, similar to the `Enum` and `Stream` modules, although computations will be executed in parallel using multiple `GenStage`s.
+`Flow` allows developers to express computations on collections, similar to the `Enum` and `Stream` modules, although computations will be executed in parallel using multiple [`GenStage`](https://github.com/elixir-lang/gen_stage)s.
 
 Here is a quick example on how to count words in a document in parallel with Flow:
 
@@ -15,7 +15,7 @@ end)
 |> Enum.to_list()
 ```
 
-See documentation for [Flow](https://hexdocs.pm/flow) or [José Valim's keynote at ElixirConf 2016](https://youtu.be/srtMWzyqdp8?t=244) introducing the main concepts behind GenStage and Flow.
+See documentation for [Flow](https://hexdocs.pm/flow) or [José Valim's keynote at ElixirConf 2016](https://youtu.be/srtMWzyqdp8?t=244) introducing the main concepts behind [GenStage](https://github.com/elixir-lang/gen_stage) and [Flow](https://hexdocs.pm/flow).
 
 ## Installation
 
@@ -28,5 +28,4 @@ end
 ```
 
 ## License
-
-Same as Elixir.
+See license for [Elixir](https://github.com/elixir-lang/elixir#license).
