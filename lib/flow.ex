@@ -285,7 +285,7 @@ defmodule Flow do
 
   Windows and triggers effectively control how the `reduce/3` function
   works. While windows and triggers allow us to control when data is
-  emitted, note data can be emitted at any time during the reducing
+  emitted, note that data can be emitted at any time during the reducing
   step by using `emit_and_reduce/3`. In truth, all window and trigger
   functinality provided by Flow can also be built by hand using the
   `emit_and_reduce/3` and `on_trigger/2` functions.
@@ -1229,6 +1229,39 @@ defmodule Flow do
     end
   end
 
+  @doc """
+  Reduces values with the given accumulator and controls which values
+  should be emitted.
+
+  `acc_fun` is a function that receives no arguments and returns
+  the actual accumulator. The `acc_fun` function is invoked per window
+  whenever a new window starts. If a trigger is emitted and it is
+  configured to reset the accumulator, the `acc_fun` function will
+  be invoked once again.
+
+  This function behaves similarly to `reduce/3`, but in addition to
+  accumulating data, it also gives full control over what will be
+  emitted. `reducer_fun` must return a tuple where the first element is
+  the list of events to be emitted and the second is the new state of
+  the accumulator.
+
+  ## Examples
+
+  As an example this is a simple implementation of a sliding window of
+  3 events. The reducer function always emits a list of the most recent
+  (at most) 3 events. Note that at the end of the input the current
+  state of the accumulator will be emitted which we filter in this
+  example at the last step.
+
+      iex> flow = Flow.from_enumerable(1..5, stages: 1)
+      iex> flow = flow |> Flow.emit_and_reduce(fn -> [] end, fn event, acc ->
+      ...>   acc = [event | acc] |> Enum.take(3)
+      ...>   {[Enum.reverse(acc)], acc}
+      ...> end)
+      iex> flow |> Enum.filter(&is_list/1)
+      [[1], [1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5]]
+
+  """
   @spec emit_and_reduce(t, (() -> acc), (term, acc -> {[event], acc})) :: t
         when acc: term(), event: term()
   def emit_and_reduce(flow, acc_fun, reducer_fun) when is_function(reducer_fun, 2) do
