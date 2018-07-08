@@ -211,6 +211,13 @@ defmodule Flow.Window do
   window and what caused the window to be emitted (`:watermark` or
   `:done`).
 
+  Note that all stages must receive an event that is outside of a specific
+  window before that window is considered complete. In other words if there are
+  multiple stages in the partition preceding a reduce operation that has
+  a window, the reduce step won't release a window until it has seen an event
+  that is outside of that window from all processes that it receives data from.
+  This could have an effect on how long events are delayed in the reduce step.
+
   ## Periodic windows (processing time)
 
   Periodic windows are similar to fixed windows except triggers are
