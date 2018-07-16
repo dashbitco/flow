@@ -67,6 +67,18 @@ defmodule FlowTest do
       end
     end
 
+    test "on mapper after emit/1" do
+      message = ~r"map/2 cannot be called after emit/1 and on_trigger/2 since events have already been emitted"
+
+      assert_raise ArgumentError, message, fn ->
+        Flow.from_enumerable([1, 2, 3])
+        |> Flow.reduce(fn -> 0 end, &+/2)
+        |> Flow.emit(:state)
+        |> Flow.map(& &1)
+        |> Enum.to_list()
+      end
+    end
+
     @tag :capture_log
     test "on window without computation" do
       assert catch_exit(

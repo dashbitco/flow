@@ -1614,13 +1614,14 @@ defmodule Flow do
   defp add_mapper(flow, name, args) do
     if has_emit_reduce?(flow) do
       raise ArgumentError,
-            "#{name}/#{length(args)} cannot be called after emit_and_reduce/3 since events " <>
+            "#{name}/#{length(args) + 1} cannot be called after emit_and_reduce/3 since events " <>
               "have already been emitted (use on_trigger/2 if you want to further emit events or modify the state)"
     end
 
     if has_on_trigger?(flow) do
       raise ArgumentError,
-            "#{name}/#{length(args)} cannot be called after on_trigger/2 since events have already been emitted"
+            "#{name}/#{length(args) + 1} cannot be called after emit/1 and on_trigger/2 " <>
+              "since events have already been emitted"
     end
 
     add_operation(flow, {:mapper, name, args})
@@ -1647,7 +1648,7 @@ defmodule Flow do
   end
 
   defp has_on_trigger?(%{operations: operations}) do
-    Enum.any?(operations, &match?({:on_trigger, _, _}, &1))
+    Enum.any?(operations, &match?({:on_trigger, _}, &1))
   end
 
   defp inject_on_trigger(flow, fun) do
