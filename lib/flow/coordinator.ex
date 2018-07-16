@@ -21,7 +21,7 @@ defmodule Flow.Coordinator do
     type_options = Keyword.take(options, [:dispatcher])
 
     {:ok, supervisor} = start_supervisor()
-    start_link = &start_child(supervisor, &1, &2)
+    start_link = &start_child(supervisor, &1)
     {producers, intermediary} = Flow.Materialize.materialize(flow, start_link, type, type_options)
 
     demand = Keyword.get(options, :demand, :forward)
@@ -66,9 +66,8 @@ defmodule Flow.Coordinator do
     Supervisor.start_link([], strategy: :one_for_one, max_restarts: 0)
   end
 
-  defp start_child(supervisor, args, opts) do
-    shutdown = Keyword.get(opts, :shutdown, 5000)
-    spec = {make_ref(), {GenStage, :start_link, args}, :temporary, shutdown, :worker, [GenStage]}
+  defp start_child(supervisor, spec) do
+    spec = Supervisor.child_spec(spec, restart: :temporary, id: make_ref())
     Supervisor.start_child(supervisor, spec)
   end
 

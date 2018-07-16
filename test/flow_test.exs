@@ -574,7 +574,7 @@ defmodule FlowTest do
     end
 
     test "only sources", %{counter: pid} do
-      assert Flow.from_stage(pid, stages: 1)
+      assert Flow.from_stages([pid], stages: 1)
              |> Enum.take(5)
              |> Enum.sort() == [0, 1, 2, 3, 4]
     end
@@ -587,7 +587,7 @@ defmodule FlowTest do
     test "each/2", %{counter: pid} do
       parent = self()
 
-      assert Flow.from_stage(pid, stages: 1)
+      assert Flow.from_stages([pid], stages: 1)
              |> Flow.each(&send(parent, &1))
              |> Enum.take(5)
              |> Enum.sort() == [0, 1, 2, 3, 4]
@@ -598,42 +598,42 @@ defmodule FlowTest do
     end
 
     test "filter/2", %{counter: pid} do
-      assert Flow.from_stage(pid, stages: 1)
+      assert Flow.from_stages([pid], stages: 1)
              |> Flow.filter(&(rem(&1, 2) == 0))
              |> Enum.take(5)
              |> Enum.sort() == [0, 2, 4, 6, 8]
     end
 
     test "filter_map/3", %{counter: pid} do
-      assert Flow.from_stage(pid, stages: 1)
+      assert Flow.from_stages([pid], stages: 1)
              |> Flow.filter_map(&(rem(&1, 2) == 0), &(&1 * 2))
              |> Enum.take(5)
              |> Enum.sort() == [0, 4, 8, 12, 16]
     end
 
     test "flat_map/2", %{counter: pid} do
-      assert Flow.from_stage(pid, stages: 1)
+      assert Flow.from_stages([pid], stages: 1)
              |> Flow.flat_map(&[&1, &1])
              |> Enum.take(5)
              |> Enum.sort() == [0, 0, 1, 1, 2]
     end
 
     test "map/2", %{counter: pid} do
-      assert Flow.from_stage(pid, stages: 1)
+      assert Flow.from_stages([pid], stages: 1)
              |> Flow.map(&(&1 * 2))
              |> Enum.take(5)
              |> Enum.sort() == [0, 2, 4, 6, 8]
     end
 
     test "reject/2", %{counter: pid} do
-      assert Flow.from_stage(pid, stages: 1)
+      assert Flow.from_stages([pid], stages: 1)
              |> Flow.reject(&(rem(&1, 2) == 0))
              |> Enum.take(5)
              |> Enum.sort() == [1, 3, 5, 7, 9]
     end
 
     test "keeps ordering", %{counter: pid} do
-      assert Flow.from_stage(pid, stages: 1)
+      assert Flow.from_stages([pid], stages: 1)
              |> Flow.filter(&(rem(&1, 2) == 0))
              |> Flow.map(fn x -> x + 1 end)
              |> Flow.map(fn x -> x * 2 end)
@@ -1052,7 +1052,7 @@ defmodule FlowTest do
       ]
 
       {:ok, pid} =
-        Flow.from_stage(counter_pid, stages: 1)
+        Flow.from_stages([counter_pid], stages: 1)
         |> Flow.filter(&(rem(&1, 2) == 0))
         |> Flow.partition(partition_opts)
         |> Flow.reduce(fn -> 0 end, &(&1 + &2))
@@ -1084,7 +1084,7 @@ defmodule FlowTest do
       {:ok, counter_pid} = GenStage.start_link(Counter, 0)
 
       {:ok, pid} =
-        Flow.from_stage(counter_pid, stages: 1, max_demand: 1)
+        Flow.from_stages([counter_pid], stages: 1, max_demand: 1)
         |> Flow.filter(&(rem(&1, 2) == 1))
         |> Flow.into_stages([])
 
@@ -1096,7 +1096,7 @@ defmodule FlowTest do
       {:ok, forwarder} = GenStage.start_link(Forwarder, self())
 
       {:ok, pid} =
-        Flow.from_stage(counter_pid, stages: 1, max_demand: 1)
+        Flow.from_stages([counter_pid], stages: 1, max_demand: 1)
         |> Flow.filter(&(rem(&1, 2) == 1))
         |> Flow.into_stages([forwarder], demand: :accumulate)
 

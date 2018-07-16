@@ -45,13 +45,13 @@ defmodule Flow.Window do
   is automatically attached to a partition if no window is specified.
   The flow below:
 
-      Flow.from_stage(some_producer)
+      Flow.from_stages([some_producer])
       |> Flow.partition()
       |> Flow.reduce(fn -> 0 end, & &1 + 2)
 
   is equivalent to:
 
-      Flow.from_stage(some_producer)
+      Flow.from_stages([some_producer])
       |> Flow.partition(window: Flow.Window.global())
       |> Flow.reduce(fn -> 0 end, & &1 + 2)
 
@@ -349,9 +349,8 @@ defmodule Flow.Window do
   end
 
   @doc false
-  @spec session(pos_integer, System.time_unit(), (t -> pos_integer)) :: t
+  @deprecated "Use emit_and_reduce/3 and on_trigger/2 to build your own window instead"
   def session(count, unit, by) when is_integer(count) and count > 0 and is_function(by, 1) do
-    IO.warn("session windows are deprecated in favor of emit_and_reduce/3 and on_trigger/2")
     %Flow.Window.Session{gap: to_ms(count, unit), by: by}
   end
 

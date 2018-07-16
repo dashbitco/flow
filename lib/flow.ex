@@ -573,27 +573,17 @@ defmodule Flow do
           "from_enumerables/2 expects a non-empty list as argument, got: #{inspect(enumerables)}"
   end
 
-  @doc """
-  Creates a flow with the given stage as producer.
-
-  Calling this function is equivalent to:
-
-      Flow.from_stages([stage], options)
-
-  See `from_stages/2` for more information.
-
-  ## Examples
-
-      Flow.from_stage(MyStage)
-
-  """
-  @spec from_stage(GenStage.stage(), keyword) :: t
+  @doc false
+  @deprecated "Use from_stages([stage], opts) instead"
   def from_stage(stage, options \\ []) do
     from_stages([stage], options)
   end
 
   @doc """
-  Creates a flow with the list of stages as producers.
+  Creates a flow with the list of stages as `producers`.
+
+  `producers` are already running stages that have type `:producer`
+  or `:producer_consumer`.
 
   ## Options
 
@@ -632,17 +622,17 @@ defmodule Flow do
   and so forth, until the whole flow shuts down.
   """
   @spec from_stages([GenStage.stage()], keyword) :: t
-  def from_stages(stages, options \\ [])
+  def from_stages(producers, options \\ [])
 
-  def from_stages([_ | _] = stages, options) do
+  def from_stages([_ | _] = producers, options) do
     options = stages(options)
     {window, options} = Keyword.pop(options, :window, Flow.Window.global())
-    %Flow{producers: {:stages, stages}, options: options, window: window}
+    %Flow{producers: {:stages, producers}, options: options, window: window}
   end
 
-  def from_stages(stages, _options) do
+  def from_stages(producers, _options) do
     raise ArgumentError,
-          "from_stages/2 expects a non-empty list as argument, got: #{inspect(stages)}"
+          "from_stages/2 expects a non-empty list as argument, got: #{inspect(producers)}"
   end
 
   @joins [:inner, :left_outer, :right_outer, :full_outer]
@@ -823,9 +813,10 @@ defmodule Flow do
   Starts and runs the flow as a separate process which
   will be a producer to the given `consumers`.
 
-  It expects a list of consumers to subscribe to. Each element
-  represents the consumer or a tuple with the consumer and the
-  subscription options as defined in `GenStage.sync_subscribe/2`.
+  `consumers` is a list of already running stages that have type
+  `:consumer` or `:producer_consumer`. Each element represents the
+  consumer or a tuple with the consumer and the subscription options
+  as defined in `GenStage.sync_subscribe/2`.
 
   The `pid` returned by this function identifies a coordinator
   process. While it is possible to send subscribe requests to

@@ -8,7 +8,7 @@ defmodule Flow.Materialize do
   def materialize(%Flow{producers: nil}, _, _, _) do
     raise ArgumentError,
           "cannot execute a flow without producers, " <>
-            "please call \"from_enumerable\" or \"from_stage\" accordingly"
+            "please call \"from_enumerable\" or \"from_producer\" accordingly"
   end
 
   def materialize(%Flow{} = flow, start_link, type, type_options) do
@@ -83,9 +83,20 @@ defmodule Flow.Materialize do
         end
 
       arg = {type, [subscribe_to: subscriptions] ++ init_opts, {i, stages}, trigger, acc, reducer}
-      {:ok, pid} = start_link.([Flow.MapReducer, arg, []], supervisor_opts)
+      {:ok, pid} = start_link.(map_reducer_spec(arg, supervisor_opts))
       {pid, [cancel: :transient]}
     end
+  end
+
+  defp map_reducer_spec(arg, supervisor_opts) do
+    shutdown = Keyword.get(supervisor_opts, :shutdown, 5000)
+
+    %{
+      id: Flow.MapReducer,
+      start: {GenStage, :start_link, [Flow.MapReducer, arg, []]},
+      modules: [Flow.MapReducer],
+      shutdown: shutdown
+    }
   end
 
   ## Producers
@@ -193,10 +204,20 @@ defmodule Flow.Materialize do
       end
 
       stream = :lists.foldl(fold_fun, enumerable, ops)
-
-      {:ok, pid} = start_link.([GenStage.Streamer, {stream, opts}, opts], supervisor_opts)
+      {:ok, pid} = start_link.(streamer_spec(stream, opts, supervisor_opts))
       {pid, []}
     end
+  end
+
+  defp streamer_spec(stream, opts, supervisor_opts) do
+    shutdown = Keyword.get(supervisor_opts, :shutdown, 5000)
+
+    %{
+      id: GenStage.Streamer,
+      start: {GenStage, :from_enumerable, [stream, opts]},
+      shutdown: shutdown,
+      modules: [GenStage.Streamer]
+    }
   end
 
   defp partition(options) do
