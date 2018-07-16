@@ -6,6 +6,10 @@ defmodule FlowTest do
   defmodule Counter do
     use GenStage
 
+    def start_link(counter) do
+      GenStage.start_link(__MODULE__, counter)
+    end
+
     def init(counter) do
       {:producer, counter}
     end
@@ -21,6 +25,10 @@ defmodule FlowTest do
   defmodule Copier do
     use GenStage
 
+    def start_link(parent) do
+      GenStage.start_link(__MODULE__, parent)
+    end
+
     def init(parent) do
       {:producer_consumer, parent}
     end
@@ -33,6 +41,10 @@ defmodule FlowTest do
 
   defmodule Forwarder do
     use GenStage
+
+    def start_link(parent) do
+      GenStage.start_link(__MODULE__, parent)
+    end
 
     def init(parent) do
       {:consumer, parent}
@@ -170,10 +182,6 @@ defmodule FlowTest do
       assert @flow |> Flow.filter(&(rem(&1, 2) == 0)) |> Enum.sort() == [2, 4, 6]
     end
 
-    test "filter_map/3" do
-      assert @flow |> Flow.filter_map(&(rem(&1, 2) == 0), &(&1 * 2)) |> Enum.sort() == [4, 8, 12]
-    end
-
     test "flat_map/2" do
       assert @flow |> Flow.flat_map(&[&1, &1]) |> Enum.sort() ==
                [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]
@@ -290,6 +298,54 @@ defmodule FlowTest do
       assert_receive {:consumed, [2]}
       assert_receive {:consumed, [4, 6]}
     end
+
+    test "into_specs/3" do
+      {:ok, _} =
+        @flow
+        |> Flow.filter(&(rem(&1, 2) == 0))
+        |> Flow.into_specs([{{Forwarder, self()}, []}])
+
+      assert_receive {:consumed, [2]}
+      assert_receive {:consumed, [4, 6]}
+    end
+
+    test "into_specs/3 with :name", config do
+      {:ok, pid} =
+        @flow
+        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.into_specs([{{Forwarder, self()}, []}], name: config.test)
+
+      assert Process.whereis(config.test) == pid
+    end
+
+    test "through_specs/3" do
+      assert @flow
+             |> Flow.through_specs([{{Copier, self()}, []}])
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Flow.through_specs([{{Copier, self()}, []}])
+             |> Flow.map(& &1)
+             |> Flow.start_link()
+
+      assert_receive {:producer_consumed, [1, 2, 3]}
+      assert_receive {:producer_consumed, [4, 5, 6]}
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [4, 6]}
+    end
+
+    test "through_specs/3 + into_specs/3" do
+      assert @flow
+             |> Flow.through_specs([{{Copier, self()}, []}])
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Flow.through_specs([{{Copier, self()}, []}])
+             |> Flow.into_specs([{{Forwarder, self()}, []}])
+
+      assert_receive {:producer_consumed, [1, 2, 3]}
+      assert_receive {:producer_consumed, [4, 5, 6]}
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [4, 6]}
+      assert_receive {:consumed, [2]}
+      assert_receive {:consumed, [4, 6]}
+    end
   end
 
   describe "enumerable-unpartioned-stream" do
@@ -311,20 +367,8 @@ defmodule FlowTest do
       assert catch_exit(@flow |> Flow.map(fn _ -> raise "oops" end) |> Enum.to_list())
     end
 
-    test "each/2" do
-      parent = self()
-      assert @flow |> Flow.each(&send(parent, &1)) |> Enum.sort() == [1, 2, 3, 4, 5, 6]
-      assert_received 1
-      assert_received 2
-      assert_received 3
-    end
-
     test "filter/2" do
       assert @flow |> Flow.filter(&(rem(&1, 2) == 0)) |> Enum.sort() == [2, 4, 6]
-    end
-
-    test "filter_map/3" do
-      assert @flow |> Flow.filter_map(&(rem(&1, 2) == 0), &(&1 * 2)) |> Enum.sort() == [4, 8, 12]
     end
 
     test "flat_map/2" do
@@ -471,6 +515,54 @@ defmodule FlowTest do
       assert_receive {:consumed, [2]}
       assert_receive {:consumed, [4, 6]}
     end
+
+    test "into_specs/3" do
+      {:ok, _} =
+        @flow
+        |> Flow.filter(&(rem(&1, 2) == 0))
+        |> Flow.into_specs([{{Forwarder, self()}, []}])
+
+      assert_receive {:consumed, [2]}
+      assert_receive {:consumed, [4, 6]}
+    end
+
+    test "into_specs/3 with :name", config do
+      {:ok, pid} =
+        @flow
+        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.into_specs([{{Forwarder, self()}, []}], name: config.test)
+
+      assert Process.whereis(config.test) == pid
+    end
+
+    test "through_specs/3" do
+      assert @flow
+             |> Flow.through_specs([{{Copier, self()}, []}])
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Flow.through_specs([{{Copier, self()}, []}])
+             |> Flow.map(& &1)
+             |> Flow.start_link()
+
+      assert_receive {:producer_consumed, [1, 2, 3]}
+      assert_receive {:producer_consumed, [4, 5, 6]}
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [4, 6]}
+    end
+
+    test "through_specs/3 + into_specs/3" do
+      assert @flow
+             |> Flow.through_specs([{{Copier, self()}, []}])
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Flow.through_specs([{{Copier, self()}, []}])
+             |> Flow.into_specs([{{Forwarder, self()}, []}])
+
+      assert_receive {:producer_consumed, [1, 2, 3]}
+      assert_receive {:producer_consumed, [4, 5, 6]}
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [4, 6]}
+      assert_receive {:consumed, [2]}
+      assert_receive {:consumed, [4, 6]}
+    end
   end
 
   describe "enumerable-partitioned-stream" do
@@ -514,11 +606,6 @@ defmodule FlowTest do
 
     test "filter/2" do
       assert @flow |> Flow.filter(&(rem(&1, 2) == 0)) |> Enum.sort() == [2, 4, 6, 8, 10]
-    end
-
-    test "filter_map/3" do
-      assert @flow |> Flow.filter_map(&(rem(&1, 2) == 0), &(&1 * 2)) |> Enum.sort() ==
-               [4, 8, 12, 16, 20]
     end
 
     test "flat_map/2" do
@@ -711,6 +798,83 @@ defmodule FlowTest do
       assert_receive {:consumed, [4]}
       assert_receive {:consumed, '\n'}
     end
+
+    test "into_specs/3" do
+      {:ok, _} =
+        @flow
+        |> Flow.filter(&(rem(&1, 2) == 0))
+        |> Flow.into_specs([{{Forwarder, self()}, []}])
+
+      assert_receive {:consumed, [2]}
+      assert_receive {:consumed, [4]}
+      assert_receive {:consumed, [6]}
+      assert_receive {:consumed, '\b'}
+      assert_receive {:consumed, '\n'}
+    end
+
+    test "into_specs/3 with :name", config do
+      {:ok, pid} =
+        @flow
+        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.into_specs([{{Forwarder, self()}, []}], name: config.test)
+
+      assert Process.whereis(config.test) == pid
+    end
+
+    test "through_specs/3" do
+      assert @flow
+             |> Flow.through_specs([{{Copier, self()}, []}])
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Flow.through_specs([{{Copier, self()}, []}])
+             |> Flow.map(& &1)
+             |> Flow.start_link()
+
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [6]}
+      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [1]}
+      assert_receive {:producer_consumed, [5]}
+      assert_receive {:producer_consumed, '\a\t'}
+      assert_receive {:producer_consumed, [3]}
+      assert_receive {:producer_consumed, [4]}
+      assert_receive {:producer_consumed, '\n'}
+
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [6]}
+      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [4]}
+      assert_receive {:producer_consumed, '\n'}
+    end
+
+    test "through_specs/3 + into_specs/3" do
+      assert @flow
+             |> Flow.through_specs([{{Copier, self()}, []}])
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Flow.through_specs([{{Copier, self()}, []}])
+             |> Flow.into_specs([{{Forwarder, self()}, []}])
+
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [6]}
+      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [1]}
+      assert_receive {:producer_consumed, [5]}
+      assert_receive {:producer_consumed, '\a\t'}
+      assert_receive {:producer_consumed, [3]}
+      assert_receive {:producer_consumed, [4]}
+      assert_receive {:producer_consumed, '\n'}
+
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [6]}
+      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [4]}
+      assert_receive {:producer_consumed, '\n'}
+
+      assert_receive {:consumed, [2]}
+      assert_receive {:consumed, [6]}
+      assert_receive {:consumed, '\b'}
+      assert_receive {:consumed, [4]}
+      assert_receive {:consumed, '\n'}
+    end
   end
 
   describe "stages-unpartioned-stream" do
@@ -725,11 +889,6 @@ defmodule FlowTest do
       assert Flow.from_stages([pid], stages: 1)
              |> Enum.take(5)
              |> Enum.sort() == [0, 1, 2, 3, 4]
-    end
-
-    @tag :capture_log
-    test "raises locally" do
-      assert catch_exit(@flow |> Flow.map(fn _ -> raise "oops" end) |> Enum.to_list())
     end
 
     test "each/2", %{counter: pid} do
@@ -750,13 +909,6 @@ defmodule FlowTest do
              |> Flow.filter(&(rem(&1, 2) == 0))
              |> Enum.take(5)
              |> Enum.sort() == [0, 2, 4, 6, 8]
-    end
-
-    test "filter_map/3", %{counter: pid} do
-      assert Flow.from_stages([pid], stages: 1)
-             |> Flow.filter_map(&(rem(&1, 2) == 0), &(&1 * 2))
-             |> Enum.take(5)
-             |> Enum.sort() == [0, 4, 8, 12, 16]
     end
 
     test "flat_map/2", %{counter: pid} do
@@ -782,6 +934,66 @@ defmodule FlowTest do
 
     test "keeps ordering", %{counter: pid} do
       assert Flow.from_stages([pid], stages: 1)
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Flow.map(fn x -> x + 1 end)
+             |> Flow.map(fn x -> x * 2 end)
+             |> Enum.take(5)
+             |> Enum.sort() == [2, 6, 10, 14, 18]
+    end
+  end
+
+  describe "specs-unpartioned-stream" do
+    @specs [{Counter, 0}]
+
+    test "only sources" do
+      assert Flow.from_specs(@specs, stages: 1)
+             |> Enum.take(5)
+             |> Enum.sort() == [0, 1, 2, 3, 4]
+    end
+
+    test "each/2" do
+      parent = self()
+
+      assert Flow.from_specs(@specs, stages: 1)
+             |> Flow.each(&send(parent, &1))
+             |> Enum.take(5)
+             |> Enum.sort() == [0, 1, 2, 3, 4]
+
+      assert_received 1
+      assert_received 2
+      assert_received 3
+    end
+
+    test "filter/2" do
+      assert Flow.from_specs(@specs, stages: 1)
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Enum.take(5)
+             |> Enum.sort() == [0, 2, 4, 6, 8]
+    end
+
+    test "flat_map/2" do
+      assert Flow.from_specs(@specs, stages: 1)
+             |> Flow.flat_map(&[&1, &1])
+             |> Enum.take(5)
+             |> Enum.sort() == [0, 0, 1, 1, 2]
+    end
+
+    test "map/2" do
+      assert Flow.from_specs(@specs, stages: 1)
+             |> Flow.map(&(&1 * 2))
+             |> Enum.take(5)
+             |> Enum.sort() == [0, 2, 4, 6, 8]
+    end
+
+    test "reject/2" do
+      assert Flow.from_specs(@specs, stages: 1)
+             |> Flow.reject(&(rem(&1, 2) == 0))
+             |> Enum.take(5)
+             |> Enum.sort() == [1, 3, 5, 7, 9]
+    end
+
+    test "keeps ordering" do
+      assert Flow.from_specs(@specs, stages: 1)
              |> Flow.filter(&(rem(&1, 2) == 0))
              |> Flow.map(fn x -> x + 1 end)
              |> Flow.map(fn x -> x * 2 end)

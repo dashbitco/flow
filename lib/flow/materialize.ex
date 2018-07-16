@@ -8,7 +8,7 @@ defmodule Flow.Materialize do
   def materialize(%Flow{producers: nil}, _, _, _) do
     raise ArgumentError,
           "cannot execute a flow without producers, " <>
-            "please call \"from_enumerable\" or \"from_producer\" accordingly"
+            "please call \"from_enumerable\", \"from_stages\" or \"from_specs\" accordingly"
   end
 
   def materialize(%Flow{} = flow, start_link, type, type_options) do
@@ -158,8 +158,8 @@ defmodule Flow.Materialize do
     {producers, consumers, ensure_ops(ops), window}
   end
 
-  defp start_producers({:from_stages, producers}, ops, _start_link, window, options) do
-    producers = for producer <- producers, do: {producer, []}
+  defp start_producers({:from_stages, producers}, ops, start_link, window, options) do
+    producers = producers.(start_link)
 
     # If there are no ops and there is a need for a custom
     # dispatcher, we need to wrap the sources in a custom op.
@@ -179,6 +179,8 @@ defmodule Flow.Materialize do
        ) do
     {producers, intermediary} = materialize(flow, start_link, :producer_consumer, options)
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
+
+    producers_consumers = producers_consumers.(start_link)
 
     for {pid, _} <- intermediary do
       for {producer_consumer, subscribe_opts} <- producers_consumers do

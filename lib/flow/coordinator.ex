@@ -28,6 +28,8 @@ defmodule Flow.Coordinator do
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
     producers = Enum.map(producers, &elem(&1, 0))
 
+    consumers = consumers.(start_link)
+
     for producer <- producers, demand == :accumulate do
       GenStage.demand(producer, demand)
     end

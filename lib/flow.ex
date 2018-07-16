@@ -14,7 +14,7 @@ defmodule Flow do
   for certain cases, such as IO-bound flows, a smaller batch size
   can be configured through the `:min_demand` and `:max_demand`
   options supported by `from_enumerable/2`, `from_stages/2`,
-  `partition/2` and `departition/5`.
+  `from_specs/2`, `partition/2`, `departition/5`, etc.
 
   Flow also provides the concepts of "windows" and "triggers",
   which allow developers to split the data into arbitrary
@@ -308,12 +308,9 @@ defmodule Flow do
   Flow allows computations to be started as a group of processes
   which may run indefinitely. This can be done by starting
   the flow as part of a supervision tree using `Flow.start_link/2`.
-  `Flow.into_stages/3` can also be used to start the flow as a
-  linked process which will send the events to the given consumers.
 
   Since Elixir v1.5, the easiest way to add Flow to your supervision
-  tree is by calling `use Flow` and then defining a `start_link/1`
-  function that calls either `Flow.start_link/2` or `Flow.into_stages/3`:
+  tree is by calling `use Flow` and then defining a `start_link/1`.
 
       defmodule MyFlow do
         use Flow
@@ -327,8 +324,24 @@ defmodule Flow do
         end
       end
 
-  The `:shutdown` and `:restart` child spec configurations can be given to
-  `use Flow`.
+  The `:shutdown` and `:restart` child spec configurations can be
+  given to `use Flow`.
+
+  Flow also provides integration with `GenStage`, allowing you to
+  specify child specifications of producers, producer consumers, and
+  consumers that are started alongside the flow and under the same
+  supervision tree. This is achieved with the `from_specs/2` (producers),
+  `through_specs/2` (producer consumers) and `into_specs/2` (consumers)
+  functions.
+
+  It is also possible to connect a flow to already running stages,
+  via the `from_stages/2` (producers), `through_stages/2` (producer
+  consumers) and `into_stages/2` (consumers) functions.
+
+  `into_stages/3` and `into_specs/3` are alternatives to `start_link/1`
+  that start the flow with the given consumers stages or the given
+  consumers child specification. Similar to `start_link/1`, they return
+  either `{:ok, pid}` or `{:error, reason}`.
 
   ## Performance discussions
 
@@ -450,8 +463,8 @@ defmodule Flow do
 
   @typep producers ::
            nil
-           | {:from_stages, [GenStage.stage()]}
-           | {:through_stages, t, [{GenStage.stage(), Keyword.t()}]}
+           | {:from_stages, (fun() -> [{GenStage.stage(), keyword}])}
+           | {:through_stages, t, (fun() -> [{GenStage.stage(), keyword}])}
            | {:enumerables, Enumerable.t()}
            | {:join, t, t, fun(), fun(), fun()}
            | {:departition, t, fun(), fun(), fun()}
@@ -514,7 +527,7 @@ defmodule Flow do
       |> Flow.from_enumerable(max_demand: 20)
 
   """
-  @spec from_enumerable(Enumerable.t(), keyword) :: t
+  @spec from_enumerable(Enumerable.t(), keyword()) :: t
   def from_enumerable(enumerable, options \\ [])
 
   def from_enumerable(%Flow{}, _options) do
@@ -560,7 +573,7 @@ defmodule Flow do
                File.stream!("some/file3", read_ahead: 100_000)]
       Flow.from_enumerables(files)
   """
-  @spec from_enumerables([Enumerable.t()], keyword) :: t
+  @spec from_enumerables([Enumerable.t()], keyword()) :: t
   def from_enumerables(enumerables, options \\ [])
 
   def from_enumerables([_ | _] = enumerables, options) do
@@ -581,10 +594,11 @@ defmodule Flow do
   end
 
   @doc """
-  Creates a flow with the list of stages as `producers`.
+  Creates a flow with a list of already running stages as `producers`.
 
   `producers` are already running stages that have type `:producer`
-  or `:producer_consumer`.
+  or `:producer_consumer`. If instead you want the producers to be
+  started alongisde the flow, see `from_specs/2` instead.
 
   ## Options
 
@@ -630,9 +644,10 @@ defmodule Flow do
   def from_stages([_ | _] = producers, options) do
     options = stages(options)
     {window, options} = Keyword.pop(options, :window, Flow.Window.global())
+    producers = Enum.map(producers, &{&1, []})
 
     %Flow{
-      producers: {:from_stages, producers},
+      producers: {:from_stages, fn _ -> producers end},
       options: options,
       window: window
     }
@@ -645,12 +660,61 @@ defmodule Flow do
   end
 
   @doc """
-  Passes the given `flow` through the given `producer_consumers`.
+  Creates a flow with a list of `producers` child specifications.
+
+  The child specification is the one defined in the `Supervisor`
+  module. The `producers` will only be started when the flow starts.
+  If the flow terminates, the producers will also be terminated.
+
+  The `:id` field of the child specification will be randomized
+  and the `:restart` value is always set to `:temporary`. All other
+  fields are kept as in.
+
+  For options and termination behaviour, see `from_stages/2`.
+
+  ## Examples
+
+      specs = [{MyProducer, arg1}, {MyProducer, arg2}]
+      Flow.from_specs(specs)
+
+  """
+  @spec from_specs([Supervisor.child_spec()], keyword()) :: t
+  def from_specs(producers, options \\ [])
+
+  def from_specs([_ | _] = producers, options) do
+    options = stages(options)
+    {window, options} = Keyword.pop(options, :window, Flow.Window.global())
+
+    fun = fn start_link ->
+      for producer <- producers do
+        {:ok, pid} = start_link.(producer)
+        {pid, []}
+      end
+    end
+
+    %Flow{
+      producers: {:from_stages, fun},
+      options: options,
+      window: window
+    }
+  end
+
+  def from_specs(producers, _options) do
+    raise ArgumentError,
+          "from_specs/2 expects a non-empty list of stages as argument, " <>
+            "got: #{inspect(producers)}"
+  end
+
+  @doc """
+  Passes a `flow` through a list of already running stages
+  as `producer_consumers`.
 
   `producers_consumers` are already running stages that have type
   `:producer_consumer`. Each element represents the consumer or a
   tuple with the consumer and the subscription options as defined
-  in `GenStage.sync_subscribe/2`.
+  in `GenStage.sync_subscribe/2`. If instead you want the producer
+  consumers to be started alongisde the flow, see `through_specs/3`
+  instead.
 
   You are required to pass an existing `flow` and it returns a new
   `flow` that you can continue processing.
@@ -703,7 +767,8 @@ defmodule Flow do
   developers to use `through_stages/3` and `through_specs/3` only
   when subscribing to unbounded (infinite) flows.
   """
-  @spec through_stages(t, [GenStage.stage()], keyword) :: t
+  @spec through_stages(t, producer_consumers, keyword()) :: t
+        when producer_consumers: [GenStage.stage() | {GenStage.stage(), keyword()}]
   def through_stages(flow, producer_consumers, options \\ [])
 
   def through_stages(%Flow{} = flow, [_ | _] = producer_consumers, options) do
@@ -720,6 +785,52 @@ defmodule Flow do
   def through_stages(%Flow{}, producers_consumers, _options) do
     raise ArgumentError,
           "through_stages/2 expects a non-empty list of stages as argument, " <>
+            "got: #{inspect(producers_consumers)}"
+  end
+
+  @doc """
+  Passes a `flow` through a list of `producer_consumers` child
+  specifications and subscriptions that will be started alongside
+  the flow.
+
+  `producers_consumers` is a list of tuples where the first element
+  is the child specification and the second is a list of subscription
+  options. The child specification is the one defined in the `Supervisor`
+  module. The `producers_consumers` will only be started when the flow
+  starts. If the flow terminates, the producer consumers will also be
+  terminated.
+
+  The `:id` field of the child specification will be randomized
+  and the `:restart` value is always set to `:temporary`. All other
+  fields are kept as in.
+
+  For options and termination behaviour, see `through_stages/3`.
+
+  ## Examples
+
+      spec = {MyConsumerProducer, arg}
+      subscription_opts = []
+      specs = [{spec, subscription_opts}]
+      Flow.through_specs(some_flow, specs)
+
+  """
+  @spec through_specs(t, [{Supervisor.child_spec(), keyword()}], keyword()) :: t
+  def through_specs(flow, producer_consumers, options \\ [])
+
+  def through_specs(%Flow{} = flow, [_ | _] = producer_consumers, options) do
+    options = stages(options)
+    {window, options} = Keyword.pop(options, :window, Flow.Window.global())
+
+    %Flow{
+      producers: {:through_stages, flow, normalize_specs(producer_consumers)},
+      options: options,
+      window: window
+    }
+  end
+
+  def through_specs(%Flow{}, producers_consumers, _options) do
+    raise ArgumentError,
+          "through_specs/2 expects a non-empty list of stages as argument, " <>
             "got: #{inspect(producers_consumers)}"
   end
 
@@ -894,17 +1005,18 @@ defmodule Flow do
   """
   @spec start_link(t, keyword()) :: GenServer.on_start()
   def start_link(flow, options \\ []) do
-    Flow.Coordinator.start_link(emit_nothing(flow), :consumer, [], options)
+    Flow.Coordinator.start_link(emit_nothing(flow), :consumer, fn _ -> [] end, options)
   end
 
   @doc """
-  Starts and runs the flow as a separate process which
-  will be a producer to the given `consumers`.
+  Starts a flow with a list of already running stages as `consumers`.
 
   `consumers` is a list of already running stages that have type
   `:consumer` or `:producer_consumer`. Each element represents the
   consumer or a tuple with the consumer and the subscription options
-  as defined in `GenStage.sync_subscribe/2`.
+  as defined in `GenStage.sync_subscribe/2`. If instead you want the
+  consumers to be started alongisde the flow, see `into_specs/3`
+  instead.
 
   The `pid` returned by this function identifies a coordinator
   process. While it is possible to send subscribe requests to
@@ -962,6 +1074,34 @@ defmodule Flow do
     Flow.Coordinator.start_link(flow, :producer_consumer, normalize_stages(consumers), options)
   end
 
+  @doc """
+  Starts a flow and the `consumers` child specifications.
+
+  `consumers` is a list of tuples where the first element is the child
+  specification and the second is a list of subscription options.
+  The child specification is the one defined in the `Supervisor`
+  module. The `consumers` will only be started when the flow starts.
+  If the flow terminates, the consumers will also be terminated.
+
+  The `:id` field of the child specification will be randomized
+  and the `:restart` value is always set to `:temporary`. All other
+  fields are kept as in.
+
+  For options and termination behaviour, see `into_stages/3`.
+
+  ## Examples
+
+      spec = {MyConsumer, arg}
+      subscription_opts = []
+      specs = [{spec, subscription_opts}]
+      Flow.into_specs(some_flow, specs)
+
+  """
+  @spec into_specs(t, [{Supervisor.child_spec(), keyword()}], keyword()) :: GenServer.on_start()
+  def into_specs(flow, consumers, options \\ []) do
+    Flow.Coordinator.start_link(flow, :producer_consumer, normalize_specs(consumers), options)
+  end
+
   ## Mappers
 
   @doc """
@@ -998,16 +1138,7 @@ defmodule Flow do
     add_mapper(flow, :filter, [filter])
   end
 
-  @doc """
-  Applies the given function filtering and mapping each input in parallel.
-
-  ## Examples
-
-      iex> flow = [1, 2, 3] |> Flow.from_enumerable() |> Flow.filter_map(&(rem(&1, 2) == 0), &(&1 * 2))
-      iex> Enum.sort(flow) # Call sort as we have no order guarantee
-      [4]
-
-  """
+  @deprecated "Use Flow.filter/2 and Flow.map/2 instead"
   @spec filter_map(t, (term -> term), (term -> term)) :: t
   def filter_map(flow, filter, mapper) when is_function(filter, 1) and is_function(mapper, 1) do
     add_mapper(flow, :filter_map, [filter, mapper])
@@ -1784,14 +1915,26 @@ defmodule Flow do
     [{:on_trigger, on_trigger} | Enum.reverse(pre)]
   end
 
-  defp normalize_stages(stages), do: Enum.map(stages, &normalize_stage/1)
+  defp normalize_specs(specs_with_opts) do
+    fn start_link ->
+      for {spec, subscription_opts} <- specs_with_opts do
+        {:ok, pid} = start_link.(spec)
+        {pid, subscription_opts}
+      end
+    end
+  end
+
+  defp normalize_stages(stages) do
+    normalized = Enum.map(stages, &normalize_stage/1)
+    fn _ -> normalized end
+  end
 
   defp normalize_stage({_, opts} = pair) when is_list(opts), do: pair
   defp normalize_stage(other), do: {other, []}
 
   defimpl Enumerable do
     def reduce(flow, acc, fun) do
-      case Flow.Coordinator.start(flow, :producer_consumer, [], demand: :accumulate) do
+      case Flow.Coordinator.start(flow, :producer_consumer, fn _ -> [] end, demand: :accumulate) do
         {:ok, pid} ->
           Flow.Coordinator.stream(pid).(acc, fun)
 
