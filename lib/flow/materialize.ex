@@ -158,16 +158,40 @@ defmodule Flow.Materialize do
     {producers, consumers, ensure_ops(ops), window}
   end
 
-  defp start_producers({:stages, producers}, ops, _start_link, window, options) do
+  defp start_producers({:from_stages, producers}, ops, _start_link, window, options) do
     producers = for producer <- producers, do: {producer, []}
 
-    # If there are no more stages and there is a need for a custom
-    # dispatcher, we need to wrap the sources in a custom stage.
+    # If there are no ops and there is a need for a custom
+    # dispatcher, we need to wrap the sources in a custom op.
     if Keyword.has_key?(options, :dispatcher) do
       {producers, producers, ensure_ops(ops), window}
     else
       {producers, producers, ops, window}
     end
+  end
+
+  defp start_producers(
+         {:through_stages, flow, producers_consumers},
+         ops,
+         start_link,
+         window,
+         options
+       ) do
+    {producers, intermediary} = materialize(flow, start_link, :producer_consumer, options)
+    timeout = Keyword.get(options, :subscribe_timeout, 5_000)
+
+    for {pid, _} <- intermediary do
+      for {producer_consumer, subscribe_opts} <- producers_consumers do
+        subscribe_opts = [to: pid, cancel: :transient] ++ subscribe_opts
+        GenStage.sync_subscribe(producer_consumer, subscribe_opts, timeout)
+      end
+    end
+
+    producers_consumers =
+      for {producer_consumer, _} <- producers_consumers, do: {producer_consumer, []}
+
+    # We need to ensure ops so we get proper map reducer consumers.
+    {producers, producers_consumers, ensure_ops(ops), window}
   end
 
   defp start_producers({:enumerables, enumerables}, ops, start_link, window, options) do

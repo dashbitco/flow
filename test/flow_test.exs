@@ -18,6 +18,19 @@ defmodule FlowTest do
     end
   end
 
+  defmodule Copier do
+    use GenStage
+
+    def init(parent) do
+      {:producer_consumer, parent}
+    end
+
+    def handle_events(events, _from, parent) do
+      send(parent, {:producer_consumed, events})
+      {:noreply, events, parent}
+    end
+  end
+
   defmodule Forwarder do
     use GenStage
 
@@ -68,7 +81,8 @@ defmodule FlowTest do
     end
 
     test "on mapper after emit/1" do
-      message = ~r"map/2 cannot be called after emit/1 and on_trigger/2 since events have already been emitted"
+      message =
+        ~r"map/2 cannot be called after emit/1 and on_trigger/2 since events have already been emitted"
 
       assert_raise ArgumentError, message, fn ->
         Flow.from_enumerable([1, 2, 3])
@@ -240,6 +254,42 @@ defmodule FlowTest do
 
       assert Process.whereis(config.test) == pid
     end
+
+    test "through_stages/3" do
+      {:ok, printer1} = GenStage.start_link(Copier, self())
+      {:ok, printer2} = GenStage.start_link(Copier, self())
+
+      assert @flow
+             |> Flow.through_stages([printer1])
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Flow.through_stages([printer2])
+             |> Flow.map(& &1)
+             |> Flow.start_link()
+
+      assert_receive {:producer_consumed, [1, 2, 3]}
+      assert_receive {:producer_consumed, [4, 5, 6]}
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [4, 6]}
+    end
+
+    test "through_stages/3 + into_stages/3" do
+      {:ok, printer1} = GenStage.start_link(Copier, self())
+      {:ok, printer2} = GenStage.start_link(Copier, self())
+      {:ok, forwarder} = GenStage.start_link(Forwarder, self())
+
+      assert @flow
+             |> Flow.through_stages([printer1])
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Flow.through_stages([printer2])
+             |> Flow.into_stages([forwarder])
+
+      assert_receive {:producer_consumed, [1, 2, 3]}
+      assert_receive {:producer_consumed, [4, 5, 6]}
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [4, 6]}
+      assert_receive {:consumed, [2]}
+      assert_receive {:consumed, [4, 6]}
+    end
   end
 
   describe "enumerable-unpartioned-stream" do
@@ -384,6 +434,42 @@ defmodule FlowTest do
         |> Flow.into_stages([forwarder], name: config.test)
 
       assert Process.whereis(config.test) == pid
+    end
+
+    test "through_stages/3" do
+      {:ok, printer1} = GenStage.start_link(Copier, self())
+      {:ok, printer2} = GenStage.start_link(Copier, self())
+
+      assert @flow
+             |> Flow.through_stages([printer1])
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Flow.through_stages([printer2])
+             |> Flow.map(& &1)
+             |> Flow.start_link()
+
+      assert_receive {:producer_consumed, [1, 2, 3]}
+      assert_receive {:producer_consumed, [4, 5, 6]}
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [4, 6]}
+    end
+
+    test "through_stages/3 + into_stages/3" do
+      {:ok, printer1} = GenStage.start_link(Copier, self())
+      {:ok, printer2} = GenStage.start_link(Copier, self())
+      {:ok, forwarder} = GenStage.start_link(Forwarder, self())
+
+      assert @flow
+             |> Flow.through_stages([printer1])
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Flow.through_stages([printer2])
+             |> Flow.into_stages([forwarder])
+
+      assert_receive {:producer_consumed, [1, 2, 3]}
+      assert_receive {:producer_consumed, [4, 5, 6]}
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [4, 6]}
+      assert_receive {:consumed, [2]}
+      assert_receive {:consumed, [4, 6]}
     end
   end
 
@@ -562,6 +648,68 @@ defmodule FlowTest do
         |> Flow.into_stages([forwarder], name: config.test)
 
       assert Process.whereis(config.test) == pid
+    end
+
+    test "through_stages/3" do
+      {:ok, printer1} = GenStage.start_link(Copier, self())
+      {:ok, printer2} = GenStage.start_link(Copier, self())
+
+      assert @flow
+             |> Flow.through_stages([printer1])
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Flow.through_stages([printer2])
+             |> Flow.map(& &1)
+             |> Flow.start_link()
+
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [6]}
+      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [1]}
+      assert_receive {:producer_consumed, [5]}
+      assert_receive {:producer_consumed, '\a\t'}
+      assert_receive {:producer_consumed, [3]}
+      assert_receive {:producer_consumed, [4]}
+      assert_receive {:producer_consumed, '\n'}
+
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [6]}
+      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [4]}
+      assert_receive {:producer_consumed, '\n'}
+    end
+
+    test "through_stages/3 + into_stages/3" do
+      {:ok, printer1} = GenStage.start_link(Copier, self())
+      {:ok, printer2} = GenStage.start_link(Copier, self())
+      {:ok, forwarder} = GenStage.start_link(Forwarder, self())
+
+      assert @flow
+             |> Flow.through_stages([printer1])
+             |> Flow.filter(&(rem(&1, 2) == 0))
+             |> Flow.through_stages([printer2])
+             |> Flow.into_stages([forwarder])
+
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [6]}
+      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [1]}
+      assert_receive {:producer_consumed, [5]}
+      assert_receive {:producer_consumed, '\a\t'}
+      assert_receive {:producer_consumed, [3]}
+      assert_receive {:producer_consumed, [4]}
+      assert_receive {:producer_consumed, '\n'}
+
+      assert_receive {:producer_consumed, [2]}
+      assert_receive {:producer_consumed, [6]}
+      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [4]}
+      assert_receive {:producer_consumed, '\n'}
+
+      assert_receive {:consumed, [2]}
+      assert_receive {:consumed, [6]}
+      assert_receive {:consumed, '\b'}
+      assert_receive {:consumed, [4]}
+      assert_receive {:consumed, '\n'}
     end
   end
 

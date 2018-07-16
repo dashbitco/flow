@@ -450,7 +450,8 @@ defmodule Flow do
 
   @typep producers ::
            nil
-           | {:stages, GenStage.stage() | [GenStage.stage()]}
+           | {:from_stages, [GenStage.stage()]}
+           | {:through_stages, t, [{GenStage.stage(), Keyword.t()}]}
            | {:enumerables, Enumerable.t()}
            | {:join, t, t, fun(), fun(), fun()}
            | {:departition, t, fun(), fun(), fun()}
@@ -606,12 +607,14 @@ defmodule Flow do
 
   ## Termination
 
-  Flow subscribes to producer stages using `cancel: :transient`.
-  This means producer stages can signal the flow that it has emitted
-  all events by terminating with reason `:normal`, `:shutdown` or
-  `{:shutdown, _}`. This is often done in the producer by using
-  `GenStage.async_info(self(), :terminate)` to send a message to
-  itself once all events have been dispatched:
+  Flow subscribes to producer stages using `cancel: :transient`. This
+  means producer stages can signal the flow that it has emitted all events
+  by terminating with reason `:normal`, `:shutdown` or `{:shutdown, _}`.
+  Therefore, if you are implementing a producer that may eventually
+  terminate, then the producer must exit with reason `:normal`, `:shutdown`
+  or `{:shutdown, _}` after emitting all events. This is often done in the
+  producer by using `GenStage.async_info(self(), :terminate)` to send a
+  message to itself once all events have been dispatched:
 
       def handle_info(:terminate, state) do
         {:stop, :shutdown, state}
@@ -627,12 +630,97 @@ defmodule Flow do
   def from_stages([_ | _] = producers, options) do
     options = stages(options)
     {window, options} = Keyword.pop(options, :window, Flow.Window.global())
-    %Flow{producers: {:stages, producers}, options: options, window: window}
+
+    %Flow{
+      producers: {:from_stages, producers},
+      options: options,
+      window: window
+    }
   end
 
   def from_stages(producers, _options) do
     raise ArgumentError,
-          "from_stages/2 expects a non-empty list as argument, got: #{inspect(producers)}"
+          "from_stages/2 expects a non-empty list of stages as argument, " <>
+            "got: #{inspect(producers)}"
+  end
+
+  @doc """
+  Passes the given `flow` through the given `producer_consumers`.
+
+  `producers_consumers` are already running stages that have type
+  `:producer_consumer`. Each element represents the consumer or a
+  tuple with the consumer and the subscription options as defined
+  in `GenStage.sync_subscribe/2`.
+
+  You are required to pass an existing `flow` and it returns a new
+  `flow` that you can continue processing.
+
+  ## Options
+
+  These options configure the stages after the producer consumers:
+
+    * `:window` - a window to run the next stages in, see `Flow.Window`
+    * `:stages` - the number of stages
+    * `:buffer_keep` - how the buffer should behave, see `c:GenStage.init/1`
+    * `:buffer_size` - how many events to buffer, see `c:GenStage.init/1`
+    * `:shutdown` - the shutdown time for this stage when the flow is shut down.
+      The same as the `:shutdown` value in a Supervisor, defaults to 5000 milliseconds.
+
+  All remaining options are sent during subscription, allowing developers
+  to customize `:min_demand`, `:max_demand` and others.
+
+  ## Examples
+
+      stages = [{pid1, min_demand: 10}, pid2, SomeProducerConsumer]
+      Flow.from_enumerable([1, 2, 3])
+      |> Flow.through_stages(stages)
+      |> Flow.start_link()
+
+  ## Termination
+
+  Flow subscribes to stages using `cancel: :transient`. This means stages
+  can signal the flow that it has emitted all events by terminating with
+  reason `:normal`, `:shutdown` or `{:shutdown, _}`. If you are implementing
+  your own producer consumer and you are subscribing to a flow that is finite,
+  you need to take this into account in your producer consumer implementation:
+
+    1. You need implement `c:GenStage.handle_subscribe/4` and store
+       whenever the stage gets a new producer
+
+    2. You need implement `c:GenStage.handle_cancel/4` and decrease
+       whenever the stage loses a producer
+
+    3. Once all producers are cancelled, you need to call
+       `GenStage.async_info(self(), :terminate)` to send a message
+       to yourself, allowing you to terminate after all events have
+       been consumed:
+
+          def handle_info(:terminate, state) do
+            {:stop, :shutdown, state}
+          end
+
+  Given the complexitity in guaranteeing termination, we recommend
+  developers to use `through_stages/3` and `through_specs/3` only
+  when subscribing to unbounded (infinite) flows.
+  """
+  @spec through_stages(t, [GenStage.stage()], keyword) :: t
+  def through_stages(flow, producer_consumers, options \\ [])
+
+  def through_stages(%Flow{} = flow, [_ | _] = producer_consumers, options) do
+    options = stages(options)
+    {window, options} = Keyword.pop(options, :window, Flow.Window.global())
+
+    %Flow{
+      producers: {:through_stages, flow, normalize_stages(producer_consumers)},
+      options: options,
+      window: window
+    }
+  end
+
+  def through_stages(%Flow{}, producers_consumers, _options) do
+    raise ArgumentError,
+          "through_stages/2 expects a non-empty list of stages as argument, " <>
+            "got: #{inspect(producers_consumers)}"
   end
 
   @joins [:inner, :left_outer, :right_outer, :full_outer]
@@ -835,15 +923,43 @@ defmodule Flow do
   ## Options
 
   This function receives the same options as `start_link/2` with
-  the addition of a `:dispatcher` option responsible for handling
-  demands that defaults to `GenStage.DemandDispatch`. It may be
-  either an atom or a tuple with the dispatcher and the dispatcher
-  options.
+  the addition of a `:dispatcher` option that configures how the
+  consumers get data from the flow and defaults to
+  `GenStage.DemandDispatch`. It may be either an atom or a tuple
+  with the dispatcher and the dispatcher options.
+
+  ## Termination
+
+  Flow subscribes to stages using `cancel: :transient`. This means stages
+  can signal the flow that it has emitted all events by terminating with
+  reason `:normal`, `:shutdown` or `{:shutdown, _}`. If you are implementing
+  your own consumer and you are subscribing to a flow that is finite,
+  you need to take this into account in your consumer implementation
+  if you want proper consumer termination:
+
+    1. You need implement `c:GenStage.handle_subscribe/4` and store
+       whenever the stage gets a new producer
+
+    2. You need implement `c:GenStage.handle_cancel/4` and decrease
+       whenever the stage loses a producer
+
+    3. Once all producers are cancelled, you need to call
+       `GenStage.async_info(self(), :terminate)` to send a message
+       to yourself, allowing you to terminate after all events have
+       been consumed:
+
+          def handle_info(:terminate, state) do
+            {:stop, :shutdown, state}
+          end
+
+  Given the complexitity in guaranteeing termination, we recommend
+  developers to use `into_stages/3` and `into_specs/3` only
+  when subscribing to unbounded (infinite) flows.
   """
   @spec into_stages(t, consumers, keyword()) :: GenServer.on_start()
         when consumers: [GenStage.stage() | {GenStage.stage(), keyword()}]
   def into_stages(flow, consumers, options \\ []) do
-    Flow.Coordinator.start_link(flow, :producer_consumer, consumers, options)
+    Flow.Coordinator.start_link(flow, :producer_consumer, normalize_stages(consumers), options)
   end
 
   ## Mappers
@@ -1667,6 +1783,11 @@ defmodule Flow do
     on_trigger = fn acc, index, trigger -> {acc_fun.(acc, index, trigger), acc} end
     [{:on_trigger, on_trigger} | Enum.reverse(pre)]
   end
+
+  defp normalize_stages(stages), do: Enum.map(stages, &normalize_stage/1)
+
+  defp normalize_stage({_, opts} = pair) when is_list(opts), do: pair
+  defp normalize_stage(other), do: {other, []}
 
   defimpl Enumerable do
     def reduce(flow, acc, fun) do

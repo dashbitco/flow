@@ -24,13 +24,13 @@ defmodule Flow.MapReducer do
   end
 
   def handle_cancel(_, {_, ref}, {producers, status, index, acc, reducer}) do
-    cond do
-      Map.has_key?(producers, ref) ->
+    case producers do
+      %{^ref => _} ->
         Process.delete(ref)
         {events, acc, status} = done_status(status, index, acc, ref)
         {:noreply, events, {Map.delete(producers, ref), status, index, acc, reducer}}
 
-      true ->
+      _ ->
         {:noreply, [], {producers, status, index, acc, reducer}}
     end
   end

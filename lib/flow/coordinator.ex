@@ -34,8 +34,8 @@ defmodule Flow.Coordinator do
 
     refs =
       for {pid, _} <- intermediary do
-        for consumer <- consumers do
-          subscribe(consumer, pid, timeout)
+        for {consumer, opts} <- consumers do
+          GenStage.sync_subscribe(consumer, [to: pid, cancel: :transient] ++ opts, timeout)
         end
 
         Process.monitor(pid)
@@ -69,14 +69,6 @@ defmodule Flow.Coordinator do
   defp start_child(supervisor, spec) do
     spec = Supervisor.child_spec(spec, restart: :temporary, id: make_ref())
     Supervisor.start_child(supervisor, spec)
-  end
-
-  defp subscribe({consumer, opts}, producer, timeout) when is_list(opts) do
-    GenStage.sync_subscribe(consumer, [to: producer, cancel: :transient] ++ opts, timeout)
-  end
-
-  defp subscribe(consumer, producer, timeout) do
-    GenStage.sync_subscribe(consumer, [to: producer, cancel: :transient], timeout)
   end
 
   def handle_call(:stream, _from, %{producers: producers, intermediary: intermediary} = state) do
