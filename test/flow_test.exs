@@ -1162,30 +1162,30 @@ defmodule FlowTest do
     end
   end
 
-  defp merged_flows(options) do
-    flow1 =
-      Stream.take_every(1..100, 2)
-      |> Flow.from_enumerable()
-      |> Flow.map(&(&1 * 2))
+  describe "merge/3 through partition" do
+    defp merge_and_partition(options) do
+      flow1 =
+        Stream.take_every(1..100, 2)
+        |> Flow.from_enumerable()
+        |> Flow.map(&(&1 * 2))
 
-    flow2 =
-      Stream.take_every(2..100, 2)
-      |> Flow.from_enumerable()
-      |> Flow.map(&(&1 * 2))
+      flow2 =
+        Stream.take_every(2..100, 2)
+        |> Flow.from_enumerable()
+        |> Flow.map(&(&1 * 2))
 
-    Flow.merge([flow1, flow2], options)
-  end
+      Flow.partition([flow1, flow2], options)
+    end
 
-  describe "merge/2" do
     test "merges different flows together" do
-      assert merged_flows(stages: 4, min_demand: 5)
+      assert merge_and_partition(stages: 4, min_demand: 5)
              |> Flow.reduce(fn -> 0 end, &(&1 + &2))
              |> Flow.on_trigger(&{[&1], &1})
              |> Enum.sum() == 10100
     end
 
     test "allows custom partitioning" do
-      assert merged_flows(stages: 4, min_demand: 5, hash: fn x -> {x, 0} end)
+      assert merge_and_partition(stages: 4, min_demand: 5, hash: fn x -> {x, 0} end)
              |> Flow.reduce(fn -> [] end, &[&1 | &2])
              |> Flow.on_trigger(&{[Enum.sum(&1)], &1})
              |> Enum.sort() == [0, 0, 0, 10100]
@@ -1198,7 +1198,43 @@ defmodule FlowTest do
           x when x <= 200 -> 1_000
         end)
 
-      assert merged_flows(window: window, stages: 4, min_demand: 5)
+      assert merge_and_partition(window: window, stages: 4, min_demand: 5)
+             |> Flow.reduce(fn -> [] end, &[&1 | &2])
+             |> Flow.on_trigger(&{[Enum.sum(&1)], &1})
+             |> Enum.sort() == [594, 596, 654, 706, 1248, 1964, 2066, 2272]
+    end
+  end
+
+  describe "merge/3 through shuffle" do
+    defp merge_and_shuffle(options) do
+      flow1 =
+        Stream.take_every(1..100, 2)
+        |> Flow.from_enumerable()
+        |> Flow.map(&(&1 * 2))
+
+      flow2 =
+        Stream.take_every(2..100, 2)
+        |> Flow.from_enumerable()
+        |> Flow.map(&(&1 * 2))
+
+      Flow.shuffle([flow1, flow2], options)
+    end
+
+    test "merges different flows together" do
+      assert merge_and_shuffle(stages: 4, min_demand: 5)
+             |> Flow.reduce(fn -> 0 end, &(&1 + &2))
+             |> Flow.on_trigger(&{[&1], &1})
+             |> Enum.sum() == 10100
+    end
+
+    test "allows custom windowding" do
+      window =
+        Flow.Window.fixed(1, :second, fn
+          x when x <= 100 -> 0
+          x when x <= 200 -> 1_000
+        end)
+
+      assert merge_and_shuffle(window: window, stages: 4, min_demand: 5)
              |> Flow.reduce(fn -> [] end, &[&1 | &2])
              |> Flow.on_trigger(&{[Enum.sum(&1)], &1})
              |> Enum.sort() == [594, 596, 654, 706, 1248, 1964, 2066, 2272]

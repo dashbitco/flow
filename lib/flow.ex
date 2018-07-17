@@ -593,6 +593,24 @@ defmodule Flow do
     from_stages([stage], options)
   end
 
+  @doc false
+  @deprecated "Use Flow.filter/2 and Flow.map/2 instead"
+  def filter_map(flow, filter, mapper) when is_function(filter, 1) and is_function(mapper, 1) do
+    add_mapper(flow, :filter_map, [filter, mapper])
+  end
+
+  @doc false
+  def merge(flow_or_flows) do
+    IO.warn("Flow.merge/1 is deprecated, use Flow.merge/3 or Flow.partition/2")
+    merge(flow_or_flows, GenStage.PartitionDispatcher, [])
+  end
+
+  @doc false
+  def merge(flow_or_flows, options) when is_list(options) do
+    IO.warn("Flow.merge/1 is deprecated, use Flow.merge/3 or Flow.partition/2")
+    merge(flow_or_flows, GenStage.PartitionDispatcher, options)
+  end
+
   @doc """
   Creates a flow with a list of already running stages as `producers`.
 
@@ -1138,12 +1156,6 @@ defmodule Flow do
     add_mapper(flow, :filter, [filter])
   end
 
-  @deprecated "Use Flow.filter/2 and Flow.map/2 instead"
-  @spec filter_map(t, (term -> term), (term -> term)) :: t
-  def filter_map(flow, filter, mapper) when is_function(filter, 1) and is_function(mapper, 1) do
-    add_mapper(flow, :filter_map, [filter, mapper])
-  end
-
   @doc """
   Applies the given function mapping each input in parallel.
 
@@ -1214,7 +1226,7 @@ defmodule Flow do
   ## Reducers
 
   @doc """
-  Creates a new partition for the given flow with the given options
+  Creates a new partition for the given flow (or flows) with the given options.
 
   Every time this function is called, a new partition is created.
   It is typically recommended to invoke it before a reducing function,
@@ -1266,9 +1278,9 @@ defmodule Flow do
     * `{:key, key}` - apply the hash function to the key of a given map
 
   """
-  @spec partition(t, keyword()) :: t
-  def partition(flow, options \\ []) when is_list(options) do
-    merge([flow], options)
+  @spec partition(t | [t], keyword()) :: t
+  def partition(flow_or_flows, options \\ []) when is_list(options) do
+    merge(List.wrap(flow_or_flows), GenStage.PartitionDispatcher, options)
   end
 
   @doc """
@@ -1375,39 +1387,64 @@ defmodule Flow do
   end
 
   @doc """
-  Merges the given flows into a new partition with the given
-  window and options.
+  Shuffles the data in the given flow (or flows) into a new
+  series of stages with the given window and options.
 
-  This function is equivalent to `partition/2`, routing events
-  with the same characteristics to the same partition, except
-  it allows multiple flows to be merged and partitioned at
-  the same time.
-
-  It accepts the same options and hash shortcuts as
-  `partition/2`. See `partition/2` for more information.
-
-  If you want to merge multiple flows but not partition them,
-  you can set the `:dispatcher` option to `GenStage.DemandDispatcher`.
+  Similar to `partition/2`, this function creates a new series of
+  stages to process the data. However, while `partition/2` routes
+  the data using the partition dispatcher, `shuffle/2` uses
+  `GenStage.DemandDispatcher`.
 
   ## Examples
 
-      Flow.merge([flow1, flow2], window: Flow.Global.window)
-      Flow.merge([flow1, flow2], stages: 4)
+      Flow.shuffle(flow1, window: Flow.Global.window)
+      Flow.shuffle([flow1, flow2], stages: 4)
+
+  ## Options
+
+    * `:window` - a `Flow.Window` struct which controls how the
+       reducing function behaves, see `Flow.Window` for more information.
+    * `:stages` - the number of partitions (reducer stages)
+    * `:shutdown` - the shutdown time for this stage when the flow is shut down.
+      The same as the `:shutdown` value in a Supervisor, defaults to 5000 milliseconds.
 
   """
-  @spec merge([t], keyword()) :: t
-  def merge(flows, options \\ [])
+  @spec shuffle(t | [t], keyword()) :: t
+  def shuffle(flow_or_flows, options \\ []) when is_list(options) do
+    merge(flow_or_flows, GenStage.DemandDispatcher, options)
+  end
 
-  def merge([%Flow{} | _] = flows, options) when is_list(options) do
-    options = stages(options)
+  @doc """
+  Merges the given flow or flows into a series of new stages with
+  the given dispatcher and options.
+
+  This is the function used as building block by `partition/2` and
+  `shuffle/2`.
+
+  ## Options
+
+    * `:window` - a `Flow.Window` struct which controls how the
+       reducing function behaves, see `Flow.Window` for more information.
+    * `:stages` - the number of partitions (reducer stages)
+    * `:shutdown` - the shutdown time for this stage when the flow is shut down.
+      The same as the `:shutdown` value in a Supervisor, defaults to 5000 milliseconds.
+
+  """
+  def merge(flow_or_flows, dispatcher, options \\ [])
+
+  def merge(%Flow{} = flow, dispatcher, options) when is_list(options) do
+    merge([flow], dispatcher, options)
+  end
+
+  def merge([%Flow{} | _] = flows, dispatcher, options) when is_list(options) do
+    options = options |> stages() |> put_dispatcher(dispatcher)
     {window, options} = Keyword.pop(options, :window, Flow.Window.global())
     %Flow{producers: {:flows, flows}, options: options, window: window}
   end
 
-  def merge(other, options) when is_list(options) do
+  def merge(other, _dispatcher, options) when is_list(options) do
     raise ArgumentError,
-          "Flow.merge/2 expects a non-empty list of flows as first argument, " <>
-            "got: #{inspect(other)}"
+          "expected a flow or a non-empty list of flows as first argument, got: #{inspect(other)}"
   end
 
   defp stages(options) do
@@ -1420,6 +1457,9 @@ defmodule Flow do
         [stages: stages] ++ options
     end
   end
+
+  defp put_dispatcher(options, GenStage.PartitionDispatcher), do: options
+  defp put_dispatcher(options, dispatcher), do: Keyword.put(options, :dispatcher, dispatcher)
 
   @doc """
   Reduces the given values with the given accumulator.
