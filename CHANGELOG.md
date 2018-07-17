@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.14.1 (2018-07-17)
+
+  * Deprecations
+    * `Flow.filter_map/3` is deprecated in favor of filter+map
+    * `Flow.from_stage/2` is deprecated in favor of `Flow.from_stages/3`
+    * `Flow.merge/2` is deprecated in favor of `Flow.partition/2` or `Flow.shuffle/2`
+
+  * Enhancements
+    * Add `Flow.shuffle/2` to shuffle the stages into new ones
+    * Add `Flow.through_stages/3` for hooking `producer_consumer`s into the flow
+    * Add `Flow.from_specs/2`, `Flow.through_specs/3` and `Flow.into_specs/3` to start stages in the same supervision tree as the flow
+
 ## v0.14.0 (2018-06-10)
 
 This release includes a redesign of how triggers and the reducing accumulator works.
