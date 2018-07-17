@@ -686,7 +686,7 @@ defmodule Flow do
 
   The `:id` field of the child specification will be randomized
   and the `:restart` value is always set to `:temporary`. All other
-  fields are kept as in.
+  fields are kept unchanged.
 
   For options and termination behaviour, see `from_stages/2`.
 
@@ -820,7 +820,7 @@ defmodule Flow do
 
   The `:id` field of the child specification will be randomized
   and the `:restart` value is always set to `:temporary`. All other
-  fields are kept as in.
+  fields are kept unchanged.
 
   For options and termination behaviour, see `through_stages/3`.
 
@@ -1103,7 +1103,7 @@ defmodule Flow do
 
   The `:id` field of the child specification will be randomized
   and the `:restart` value is always set to `:temporary`. All other
-  fields are kept as in.
+  fields are kept unchanged.
 
   For options and termination behaviour, see `into_stages/3`.
 
