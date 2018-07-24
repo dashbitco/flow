@@ -55,13 +55,11 @@ defmodule Flow.Coordinator do
     {:ok, state}
   end
 
-  # We have a supervisor for the whole flow. All processes
-  # are temporary unless the consumers given via into_specs.
-  # That's because we always wait for the error to propagate
-  # through the whole flow, and then we terminate. For this
-  # to work, it also means all children are temporary, except
-  # the consumers given into_specs. Once those crash, they
-  # terminate the whole flow according to their restart type.
+  # We have a supervisor for the whole flow. We always wait for an error
+  # to propagate through the whole flow, and then we terminate. For this
+  # to work all children are started as temporary, except the consumers
+  # given via into_specs. Once those crash, they terminate the whole
+  # flow according to their restart type.
   defp start_supervisor do
     Supervisor.start_link([], strategy: :one_for_one, max_restarts: 0)
   end
