@@ -16,36 +16,36 @@ defmodule Flow.Coordinator do
 
   ## Callbacks
 
-  def init({flow, type, consumers, options}) do
+  def init({flow, type, {inner_or_outer, consumers}, options}) do
     Process.flag(:trap_exit, true)
     type_options = Keyword.take(options, [:dispatcher])
 
     {:ok, supervisor} = start_supervisor()
-    start_link = &start_child(supervisor, &1)
+    start_link = &start_child(supervisor, &1, restart: :temporary)
     {producers, intermediary} = Flow.Materialize.materialize(flow, start_link, type, type_options)
 
     demand = Keyword.get(options, :demand, :forward)
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
     producers = Enum.map(producers, &elem(&1, 0))
 
-    consumers = consumers.(start_link)
+    consumers = consumers.(&start_child(supervisor, &1, []))
 
     for producer <- producers, demand == :accumulate do
       GenStage.demand(producer, demand)
     end
 
-    refs =
-      for {pid, _} <- intermediary do
-        for {consumer, opts} <- consumers do
-          GenStage.sync_subscribe(consumer, [to: pid, cancel: :transient] ++ opts, timeout)
-        end
-
-        Process.monitor(pid)
+    for {pid, _} <- intermediary do
+      for {consumer, opts} <- consumers do
+        GenStage.sync_subscribe(consumer, [to: pid, cancel: :transient] ++ opts, timeout)
       end
+    end
 
     for producer <- producers, demand == :forward do
       GenStage.demand(producer, demand)
     end
+
+    to_ref = if inner_or_outer == :inner, do: consumers, else: intermediary
+    refs = Enum.map(to_ref, fn {pid, _} -> Process.monitor(pid) end)
 
     state = %{
       intermediary: intermediary,
@@ -57,19 +57,19 @@ defmodule Flow.Coordinator do
     {:ok, state}
   end
 
-  # We have a supervisor for producers and another for producer_consumers.
-  #
-  # If any producer crashes with non-normal/non-shutdown exit, it causes
-  # other producers to exit eventually leading to the termination of all
-  # map reducers.
-  #
-  # Once all map reducers exit, the coordinator exits too.
-  defp start_supervisor() do
+  # We have a supervisor for the whole flow. All processes
+  # are temporary unless the consumers given via into_specs.
+  # That's because we always wait for the error to propagate
+  # through the whole flow, and then we terminate. For this
+  # to work, it also means all children are temporary, except
+  # the consumers given into_specs. Once those crash, they
+  # terminate the whole flow according to their restart type.
+  defp start_supervisor do
     Supervisor.start_link([], strategy: :one_for_one, max_restarts: 0)
   end
 
-  defp start_child(supervisor, spec) do
-    spec = Supervisor.child_spec(spec, restart: :temporary, id: make_ref())
+  defp start_child(supervisor, spec, opts) do
+    spec = Supervisor.child_spec(spec, [id: make_ref()] ++ opts)
     Supervisor.start_child(supervisor, spec)
   end
 

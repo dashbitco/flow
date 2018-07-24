@@ -655,6 +655,9 @@ defmodule Flow do
   Once all producers have finished, the stages subscribed to the producer
   will terminate, causing the next layer of stages in the flow to terminate
   and so forth, until the whole flow shuts down.
+
+  If the exit reason is none of the above, it will cause the next stages to
+  terminate immediately, eventually causing the whole flow to terminate.
   """
   @spec from_stages([GenStage.stage()], keyword) :: t
   def from_stages(producers, options \\ [])
@@ -684,9 +687,12 @@ defmodule Flow do
   module. The `producers` will only be started when the flow starts.
   If the flow terminates, the producers will also be terminated.
 
-  The `:id` field of the child specification will be randomized
-  and the `:restart` value is always set to `:temporary`. All other
-  fields are kept unchanged.
+  The `:id` field of the child specification will be randomized.
+  The `:restart` option is set to `:temporary` but it behaves
+  as `:transient`. If a producer terminates, its exit reason will
+  propagate through the flow. The exit is considered abnormal
+  unless the reason is `:normal`, `:shutdown` or `{:shutdown, _}`.
+  All other child specification fields are kept unchanged.
 
   For options and termination behaviour, see `from_stages/2`.
 
@@ -784,6 +790,9 @@ defmodule Flow do
   Given the complexitity in guaranteeing termination, we recommend
   developers to use `through_stages/3` and `through_specs/3` only
   when subscribing to unbounded (infinite) flows.
+
+  If the exit reason is none of the above, it will cause the next stages
+  to terminate immediately, eventually causing the whole flow to terminate.
   """
   @spec through_stages(t, producer_consumers, keyword()) :: t
         when producer_consumers: [GenStage.stage() | {GenStage.stage(), keyword()}]
@@ -818,9 +827,12 @@ defmodule Flow do
   starts. If the flow terminates, the producer consumers will also be
   terminated.
 
-  The `:id` field of the child specification will be randomized
-  and the `:restart` value is always set to `:temporary`. All other
-  fields are kept unchanged.
+  The `:id` field of the child specification will be randomized.
+  The `:restart` option is set to `:temporary` but it behaves
+  as `:transient`. If a producer terminates, its exit reason will
+  propagate through the flow. The exit is considered abnormal
+  unless the reason is `:normal`, `:shutdown` or `{:shutdown, _}`.
+  All other child specification fields are kept unchanged.
 
   For options and termination behaviour, see `through_stages/3`.
 
@@ -1023,7 +1035,7 @@ defmodule Flow do
   """
   @spec start_link(t, keyword()) :: GenServer.on_start()
   def start_link(flow, options \\ []) do
-    Flow.Coordinator.start_link(emit_nothing(flow), :consumer, fn _ -> [] end, options)
+    Flow.Coordinator.start_link(emit_nothing(flow), :consumer, {:outer, fn _ -> [] end}, options)
   end
 
   @doc """
@@ -1073,10 +1085,7 @@ defmodule Flow do
     2. You need implement `c:GenStage.handle_cancel/4` and decrease
        whenever the stage loses a producer
 
-    3. Once all producers are cancelled, you need to call
-       `GenStage.async_info(self(), :terminate)` to send a message
-       to yourself, allowing you to terminate after all events have
-       been consumed:
+    3. Once all producers are cancelled, you can terminate:
 
           def handle_info(:terminate, state) do
             {:stop, :shutdown, state}
@@ -1089,7 +1098,12 @@ defmodule Flow do
   @spec into_stages(t, consumers, keyword()) :: GenServer.on_start()
         when consumers: [GenStage.stage() | {GenStage.stage(), keyword()}]
   def into_stages(flow, consumers, options \\ []) do
-    Flow.Coordinator.start_link(flow, :producer_consumer, normalize_stages(consumers), options)
+    Flow.Coordinator.start_link(
+      flow,
+      :producer_consumer,
+      {:outer, normalize_stages(consumers)},
+      options
+    )
   end
 
   @doc """
@@ -1101,9 +1115,10 @@ defmodule Flow do
   module. The `consumers` will only be started when the flow starts.
   If the flow terminates, the consumers will also be terminated.
 
-  The `:id` field of the child specification will be randomized
-  and the `:restart` value is always set to `:temporary`. All other
-  fields are kept unchanged.
+  The `:id` field of the child specification will be randomized.
+  All other fields are kept as in. If the consumer terminates,
+  it will behave according to its restart strategy. Once a consumer
+  terminates, the whole flow is terminated.
 
   For options and termination behaviour, see `into_stages/3`.
 
@@ -1117,7 +1132,12 @@ defmodule Flow do
   """
   @spec into_specs(t, [{Supervisor.child_spec(), keyword()}], keyword()) :: GenServer.on_start()
   def into_specs(flow, consumers, options \\ []) do
-    Flow.Coordinator.start_link(flow, :producer_consumer, normalize_specs(consumers), options)
+    Flow.Coordinator.start_link(
+      flow,
+      :producer_consumer,
+      {:inner, normalize_specs(consumers)},
+      options
+    )
   end
 
   ## Mappers
@@ -1974,7 +1994,9 @@ defmodule Flow do
 
   defimpl Enumerable do
     def reduce(flow, acc, fun) do
-      case Flow.Coordinator.start(flow, :producer_consumer, fn _ -> [] end, demand: :accumulate) do
+      opts = [demand: :accumulate]
+
+      case Flow.Coordinator.start(flow, :producer_consumer, {:outer, fn _ -> [] end}, opts) do
         {:ok, pid} ->
           Flow.Coordinator.stream(pid).(acc, fun)
 

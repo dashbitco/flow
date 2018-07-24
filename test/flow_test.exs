@@ -56,6 +56,23 @@ defmodule FlowTest do
     end
   end
 
+  defmodule Sleeper do
+    use GenStage
+
+    def start_link(parent) do
+      GenStage.start_link(__MODULE__, parent, name: Sleeper)
+    end
+
+    def init(parent) do
+      {:consumer, parent}
+    end
+
+    def handle_events(events, _from, parent) do
+      send(parent, {:consumed, self(), events})
+      Process.sleep(:infinity)
+    end
+  end
+
   describe "on use" do
     test "defines a child_spec/2 function" do
       defmodule MyFlow do
@@ -1437,31 +1454,99 @@ defmodule FlowTest do
   end
 
   describe "coordinator" do
-    @tag :capture_log
     test "subscribes to coordinator after into_stages start" do
       {:ok, counter_pid} = GenStage.start_link(Counter, 0)
       {:ok, forwarder} = GenStage.start_link(Forwarder, self())
 
-      partition_opts = [
-        max_demand: 1,
-        window: Flow.Window.global() |> Flow.Window.trigger_every(1)
-      ]
-
       {:ok, pid} =
         Flow.from_stages([counter_pid], stages: 1)
-        |> Flow.filter(&(rem(&1, 2) == 0))
-        |> Flow.partition(partition_opts)
-        |> Flow.reduce(fn -> 0 end, &(&1 + &2))
-        |> Flow.on_trigger(&{[&1 + 1], 0})
+        |> Flow.map(&(&1 * 2))
         |> Flow.into_stages([])
 
-      GenStage.sync_subscribe(forwarder, to: pid, cancel: :transient)
+      GenStage.sync_subscribe(forwarder, to: pid, cancel: :transient, max_demand: 1)
 
-      assert_receive {:consumed, [1]}
-      refute_receive {:consumed, [2]}
-      assert_receive {:consumed, [3]}
-      assert_receive {:consumed, [5]}
-      assert_receive {:consumed, [7]}
+      assert_receive {:consumed, [2]}
+      assert_receive {:consumed, [4]}
+      assert_receive {:consumed, [6]}
+    end
+
+    test "subscribes to coordinator after into_specs start" do
+      {:ok, forwarder} = GenStage.start_link(Forwarder, self())
+
+      {:ok, pid} =
+        Flow.from_specs([{Counter, 0}], stages: 1)
+        |> Flow.map(&(&1 * 2))
+        |> Flow.into_specs([{{Sleeper, self()}, [max_demand: 1]}])
+
+      GenStage.sync_subscribe(forwarder, to: pid, cancel: :transient, max_demand: 1)
+
+      assert_receive {:consumed, _, [0]}
+      assert_receive {:consumed, [2]}
+      assert_receive {:consumed, [4]}
+      assert_receive {:consumed, [6]}
+    end
+
+    @tag :capture_log
+    test "terminates according to tree in into_specs/3" do
+      Process.flag(:trap_exit, true)
+
+      {:ok, pid} =
+        Flow.from_specs([{Counter, 0}], stages: 1)
+        |> Flow.map(&(&1 * 2))
+        |> Flow.into_specs([{{Forwarder, self()}, max_demand: 1}])
+
+      # assert_receive {:consumed, [0]}
+
+      [_consumer, _producer_consumer, {_, producer, _, _}] =
+        Supervisor.which_children(:sys.get_state(pid).supervisor)
+
+      Process.link(producer)
+      Process.exit(producer, :oops)
+      assert_receive {:EXIT, ^producer, :oops}
+      assert_receive {:EXIT, ^pid, :shutdown}
+    end
+
+    test "terminates according to consumer strategy in into_specs/3" do
+      Process.flag(:trap_exit, true)
+
+      # restart: :permanent with shutdown exit
+      spec = {Sleeper, self()}
+
+      {:ok, pid} =
+        Flow.from_specs([{Counter, 0}], stages: 1)
+        |> Flow.map(&(&1 * 2))
+        |> Flow.into_specs([{spec, max_demand: 4}])
+
+      sleeper = Process.whereis(Sleeper)
+      assert_receive {:consumed, ^sleeper, [0, 2]}
+      Process.exit(sleeper, :oops)
+      assert_receive {:EXIT, ^pid, :shutdown}
+
+      # restart: :permanent with normal exit
+      spec = {Sleeper, self()}
+
+      {:ok, pid} =
+        Flow.from_specs([{Counter, 0}], stages: 1)
+        |> Flow.map(&(&1 * 2))
+        |> Flow.into_specs([{spec, max_demand: 4}])
+
+      sleeper = Process.whereis(Sleeper)
+      assert_receive {:consumed, ^sleeper, [0, 2]}
+      Process.exit(sleeper, :shutdown)
+      assert_receive {:EXIT, ^pid, :normal}
+
+      # restart: :transient with no exit
+      spec = Supervisor.child_spec(spec, restart: :transient)
+
+      {:ok, _} =
+        Flow.from_specs([{Counter, 0}], stages: 1)
+        |> Flow.map(&(&1 * 2))
+        |> Flow.into_specs([{spec, max_demand: 4}])
+
+      sleeper = Process.whereis(Sleeper)
+      assert_receive {:consumed, ^sleeper, [0, 2]}
+      Process.exit(sleeper, :shutdown)
+      refute_receive {:EXIT, ^pid, _}
     end
 
     @tag :capture_log
