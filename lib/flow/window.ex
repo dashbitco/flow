@@ -388,7 +388,7 @@ defmodule Flow.Window do
   This function expects the trigger accumulator function, which will
   be invoked at the beginning of every window, and a trigger function
   that receives the current batch of events and its own accumulator.
-  The trigger function must return one of the two values:
+  The trigger function must return one of the three values:
 
     * `{:cont, acc}` - the reduce operation should continue as usual.
        `acc` is the trigger state.
