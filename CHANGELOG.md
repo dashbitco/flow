@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.14.2 (2018-07-24)
+
+  * Bug fixes
+    * Make sure consumers added via `into_specs/3` restart the flow in case of failures
+
 ## v0.14.1 (2018-07-17)
 
   * Deprecations
