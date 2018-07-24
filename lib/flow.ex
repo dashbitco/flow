@@ -1087,9 +1087,11 @@ defmodule Flow do
 
     3. Once all producers are cancelled, you can terminate:
 
-          def handle_info(:terminate, state) do
-            {:stop, :shutdown, state}
-          end
+       ```elixir
+       def handle_info(:terminate, state) do
+         {:stop, :shutdown, state}
+       end
+       ```
 
   Given the complexitity in guaranteeing termination, we recommend
   developers to use `into_stages/3` and `into_specs/3` only
