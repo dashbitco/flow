@@ -30,18 +30,16 @@ defmodule Flow.Coordinator do
 
     consumers = consumers.(&start_child(supervisor, &1, []))
 
-    for producer <- producers, demand == :accumulate do
-      GenStage.demand(producer, demand)
+    if demand == :accumulate do
+      for producer <- producers, do: GenStage.demand(producer, demand)
     end
 
-    for {pid, _} <- intermediary do
-      for {consumer, opts} <- consumers do
-        GenStage.sync_subscribe(consumer, [to: pid, cancel: :transient] ++ opts, timeout)
-      end
+    for {pid, _} <- intermediary, {consumer, opts} <- consumers do
+      GenStage.sync_subscribe(consumer, [to: pid, cancel: :transient] ++ opts, timeout)
     end
 
-    for producer <- producers, demand == :forward do
-      GenStage.demand(producer, demand)
+    if demand == :forward do
+      for producer <- producers, do: GenStage.demand(producer, demand)
     end
 
     to_ref = if inner_or_outer == :inner, do: consumers, else: intermediary
