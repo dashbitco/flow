@@ -725,8 +725,8 @@ defmodule Flow do
 
   def from_specs(producers, _options) do
     raise ArgumentError,
-          "from_specs/2 expects a non-empty list of stages as argument, " <>
-            "got: #{inspect(producers)}"
+          "from_specs/2 expects a non-empty list of Supervisor child specs " <>
+            "of stages as argument, got: #{inspect(producers)}"
   end
 
   @doc """
@@ -860,8 +860,8 @@ defmodule Flow do
 
   def through_specs(%Flow{}, producers_consumers, _options) do
     raise ArgumentError,
-          "through_specs/2 expects a non-empty list of stages as argument, " <>
-            "got: #{inspect(producers_consumers)}"
+          "through_specs/2 expects a non-empty list of Supervisor child specs " <>
+            " of stages as argument, got: #{inspect(producers_consumers)}"
   end
 
   @joins [:inner, :left_outer, :right_outer, :full_outer]
