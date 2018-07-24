@@ -32,24 +32,12 @@ defmodule Flow.Materialize do
   end
 
   def split_operations(operations) do
-    split_operations(:lists.reverse(operations), :mapper, [])
-  end
-
-  defp split_operations([{:mapper, _, _} = op | ops], :mapper, acc_ops) do
-    split_operations(ops, :mapper, [op | acc_ops])
-  end
-
-  defp split_operations([op | ops], _type, acc_ops) do
-    split_operations(ops, :reducer, [op | acc_ops])
-  end
-
-  defp split_operations([], :mapper, ops) do
-    {:mapper, mapper_ops(ops), :lists.reverse(ops)}
-  end
-
-  defp split_operations([], :reducer, ops) do
-    ops = :lists.reverse(ops)
-    {:reducer, reducer_ops(ops), ops}
+    if Enum.all?(operations, &match?({:mapper, _, _}, &1)) do
+      {:mapper, mapper_ops(operations), :lists.reverse(operations)}
+    else
+      ops = :lists.reverse(operations)
+      {:reducer, reducer_ops(ops), ops}
+    end
   end
 
   defp start_stages(:none, window, producers, _start_link, _type, _options) do
