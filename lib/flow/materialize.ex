@@ -170,11 +170,9 @@ defmodule Flow.Materialize do
 
     producers_consumers = producers_consumers.(start_link)
 
-    for {pid, _} <- intermediary do
-      for {producer_consumer, subscribe_opts} <- producers_consumers do
-        subscribe_opts = [to: pid, cancel: :transient] ++ subscribe_opts
-        GenStage.sync_subscribe(producer_consumer, subscribe_opts, timeout)
-      end
+    for {pid, _} <- intermediary, {producer_consumer, subscribe_opts} <- producers_consumers do
+      subscribe_opts = [to: pid, cancel: :transient] ++ subscribe_opts
+      GenStage.sync_subscribe(producer_consumer, subscribe_opts, timeout)
     end
 
     producers_consumers =
