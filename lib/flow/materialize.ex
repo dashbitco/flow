@@ -586,7 +586,7 @@ defmodule Flow.Materialize do
   end
 
   defp build_emit_and_reducer(mappers, fun) do
-    reducer = :lists.foldl(&mapper/2, fun, mappers)
+    reducer = reducer_from_mappers(mappers, fun)
 
     emit_and_reducer = fn event, {events, acc} ->
       case reducer.(event, acc) do
@@ -602,7 +602,7 @@ defmodule Flow.Materialize do
   end
 
   defp build_reducer(mappers, fun) do
-    reducer = :lists.foldl(&mapper/2, fun, mappers)
+    reducer = reducer_from_mappers(mappers, fun)
 
     fn _ref, events, acc, _index ->
       {[], :lists.foldl(reducer, acc, events)}
@@ -618,7 +618,7 @@ defmodule Flow.Materialize do
         fun
 
       {mappers, [{:on_trigger, fun}]} ->
-        reducer = :lists.foldl(&mapper/2, &[&1 | &2], mappers)
+        reducer = reducer_from_mappers(mappers)
 
         fn acc, index, trigger ->
           acc |> Enum.reduce([], reducer) |> Enum.reverse() |> fun.(index, trigger)
@@ -645,13 +645,13 @@ defmodule Flow.Materialize do
         end
 
       {mappers, []} ->
-        reducer = :lists.foldl(&mapper/2, &[&1 | &2], mappers)
+        reducer = reducer_from_mappers(mappers)
         fn acc, _, _ -> {acc |> Enum.reduce([], reducer) |> Enum.reverse(), acc} end
     end
   end
 
   defp build_uniq_reducer(mappers, reducer, uniq_by) do
-    uniq_by = :lists.foldl(&mapper/2, uniq_by_reducer(uniq_by), mappers)
+    uniq_by = reducer_from_mappers(mappers, uniq_by_reducer(uniq_by))
 
     fn ref, events, {set, acc}, index ->
       {set, events} = :lists.foldl(uniq_by, {set, []}, events)
@@ -681,11 +681,15 @@ defmodule Flow.Materialize do
   ## Mappers
 
   defp mapper_ops(ops) do
-    reducer = :lists.foldl(&mapper/2, &[&1 | &2], ops)
+    reducer = reducer_from_mappers(ops)
 
     {fn -> [] end,
      fn _ref, events, [], _index -> {:lists.reverse(:lists.foldl(reducer, [], events)), []} end,
      fn _acc, _index, _trigger -> {[], []} end}
+  end
+
+  defp reducer_from_mappers(mappers, reducer \\ &[&1 | &2]) do
+    :lists.foldl(&mapper/2, reducer, mappers)
   end
 
   defp mapper({:mapper, :each, [each]}, fun) do
