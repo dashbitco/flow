@@ -1,15 +1,27 @@
 language: elixir
-elixir:
-  - 1.5.1
-  - 1.6.5
+matrix:
+  include:
+    - elixir: "1.5.3"
+      otp_release: "19.3"
+    - elixir: "1.5.3"
+      otp_release: "20.3"
+    - elixir: "1.6.6"
+      otp_release: "19.3"
+    - elixir: "1.6.6"
+      otp_release: "20.3"
+    - elixir: "1.6.6"
+      otp_release: "21.0"
+    - elixir: "1.7.0-rc.1"
+      otp_release: "20.3"
+    - elixir: "1.7.0-rc.1"
+      otp_release: "21.0"
 sudo: false # to use faster container based build environment
 notifications:
   recipients:
-    - jose.valim@plataformatec.com.br
-otp_release:
-  - 18.0
+    - jose.valim@gmail.com
+    - lackac@lackac.hu
 script:
-  - if [[ $(elixir --version) = *"1.6"* ]]; then mix format --check-formatted; fi
+  - elixir --version | grep -q '^Elixir 1\.5' || mix format --check-formatted
   - mix test
 after_script:
   - mix deps.get --only docs
