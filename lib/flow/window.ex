@@ -260,9 +260,9 @@ defmodule Flow.Window do
   @type type :: :global | :fixed | :session | :periodic | :count | any()
 
   @typedoc """
-  A function that retrieves the field to window by.
+  A function that returns the event time to window by.
 
-  It must be an integer representing the time in milliseconds.
+  It must return an integer representing the time in milliseconds.
   Flow does not care if the integer is using the UNIX epoch,
   Gregorian epoch or any other as long as it is consistent.
   """
@@ -271,8 +271,7 @@ defmodule Flow.Window do
   @typedoc """
   The window identifier.
 
-  It is `:global` for `:global` windows or
-  an integer for fixed windows.
+  It is `:global` for `:global` windows or an integer for fixed windows.
   """
   @type id :: :global | non_neg_integer()
 
@@ -307,10 +306,10 @@ defmodule Flow.Window do
   end
 
   @doc """
-  Returns a periodic-based window on every `count` `unit`.
+  Returns a period-based window of every `count` `unit`.
 
   `count` is a positive integer and `unit` is one of `:millisecond`,
-  `:second`, `:minute`, `:hour`. Remember periodic triggers are established
+  `:second`, `:minute`, or `:hour`. Remember periodic triggers are established
   per partition and are message-based, which means partitions will emit the
   triggers at different times and possibly with delays based on the partition
   message queue size.
@@ -330,7 +329,7 @@ defmodule Flow.Window do
   event time is calculated by the given function `by`.
 
   `count` is a positive integer and `unit` is one of `:millisecond`,
-  `:second`, `:minute`, `:hour`.
+  `:second`, `:minute`, or `:hour`.
 
   Fixed window triggers have the shape of `{:fixed, window, trigger_name}`,
   where `window` is an integer that represents the beginning timestamp
@@ -364,7 +363,7 @@ defmodule Flow.Window do
   effectively emitting the `:done` trigger.
 
   `count` is a positive number. The `unit` may be a time unit
-  (`:second`, `:millisecond`, `:second`, `:minute` and `:hour`).
+  (`:millisecond`, `:second`, `:minute`, or `:hour`).
   """
   @spec allowed_lateness(t, pos_integer, System.time_unit()) :: t
   def allowed_lateness(window, count, unit)
@@ -391,16 +390,16 @@ defmodule Flow.Window do
   The trigger function must return one of the three values:
 
     * `{:cont, acc}` - the reduce operation should continue as usual.
-       `acc` is the trigger state.
+      `acc` is the trigger state.
 
     * `{:cont, events, acc}` - the reduce operation should continue, but
-       only with the events you want to emit as part of the next state.
-       `acc` is the trigger state.
+      only with the events you want to emit as part of the next state.
+      `acc` is the trigger state.
 
-    * `{:trigger, name, pre, pos, acc}` - where `name` is the
-      trigger `name`, `pre` are the events to be consumed before the trigger,
-      `pos` controls events to be processed after the trigger with the `acc`
-      as the new trigger accumulator.
+    * `{:trigger, name, pre, pos, acc}` - where `name` is the trigger `name`,
+      `pre` are the events to be consumed before the trigger, `pos` controls
+      events to be processed after the trigger with the `acc` as the new trigger
+      accumulator.
 
   We recommend looking at the implementation of `trigger_every/3` as
   an example of a custom trigger.
@@ -464,7 +463,7 @@ defmodule Flow.Window do
   periodic trigger.
 
   `count` is a positive integer and `unit` is one of `:millisecond`,
-  `:second`, `:minute`, `:hour`. Remember periodic triggers are established
+  `:second`, `:minute`, or `:hour`. Remember periodic triggers are established
   per partition and are message-based, which means partitions will emit the
   triggers at different times and possibly with delays based on the partition
   message queue size.
