@@ -254,7 +254,7 @@ defmodule Flow.Window do
   between count windows and global windows with count triggers.
   """
 
-  @type t :: %{required(:trigger) => {fun(), fun()} | nil, required(:periodically) => []}
+  @type t :: %{required(:trigger) => {fun(), fun()} | nil, required(:periodically) => [trigger]}
 
   @typedoc "The supported window types."
   @type type :: :global | :fixed | :session | :periodic | :count | any()
@@ -274,6 +274,11 @@ defmodule Flow.Window do
   It is `:global` for `:global` windows or an integer for fixed windows.
   """
   @type id :: :global | non_neg_integer()
+
+  @typedoc """
+  The supported time units for fixed and periodic windows.
+  """
+  @type time_unit :: :millisecond | :second | :minute | :hour
 
   @typedoc "The name of the trigger."
   @type trigger :: term
@@ -319,7 +324,7 @@ defmodule Flow.Window do
 
   See the section on "Periodic windows" in the module documentation for examples.
   """
-  @spec periodic(pos_integer, System.time_unit()) :: t
+  @spec periodic(pos_integer, time_unit) :: t
   def periodic(count, unit) when is_integer(count) and count > 0 do
     %Flow.Window.Periodic{duration: to_ms(count, unit)}
   end
@@ -342,7 +347,7 @@ defmodule Flow.Window do
 
   See the section on "Fixed windows" in the module documentation for examples.
   """
-  @spec fixed(pos_integer, System.time_unit(), (t -> pos_integer)) :: t
+  @spec fixed(pos_integer, time_unit, (t -> pos_integer)) :: t
   def fixed(count, unit, by) when is_integer(count) and count > 0 and is_function(by, 1) do
     %Flow.Window.Fixed{duration: to_ms(count, unit), by: by}
   end
@@ -365,7 +370,7 @@ defmodule Flow.Window do
   `count` is a positive number. The `unit` may be a time unit
   (`:millisecond`, `:second`, `:minute`, or `:hour`).
   """
-  @spec allowed_lateness(t, pos_integer, System.time_unit()) :: t
+  @spec allowed_lateness(t, pos_integer, time_unit) :: t
   def allowed_lateness(window, count, unit)
 
   def allowed_lateness(%{lateness: _} = window, count, unit) do
@@ -480,7 +485,7 @@ defmodule Flow.Window do
   Similar to periodic triggers, message-based triggers will also be
   invoked to all windows that have changed since the last trigger.
   """
-  @spec trigger_periodically(t, pos_integer, System.time_unit()) :: t
+  @spec trigger_periodically(t, pos_integer, time_unit) :: t
   def trigger_periodically(%{periodically: periodically} = window, count, unit)
       when is_integer(count) and count > 0 do
     trigger = {to_ms(count, unit), {:periodically, count, unit}}
