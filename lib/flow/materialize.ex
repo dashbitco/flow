@@ -185,40 +185,21 @@ defmodule Flow.Materialize do
   end
 
   defp start_producers({:enumerables, enumerables}, ops, start_link, window, options) do
-    # options configures all stages before partition, so it effectively
-    # controls the number of stages consuming the enumerables.
-    stages = Keyword.fetch!(options, :stages)
+    # If there are no ops, just start the enumerables with the options.
+    # Otherwise it is a regular producer consumer with demand dispatcher.
+    # In this case, options is used by subsequent mapper/reducer stages.
+    streamer_opts = if ops == :none, do: options, else: []
 
-    case ops do
-      {:mapper, _compiled_ops, mapper_ops} when stages < length(enumerables) ->
-        # Fuse mappers into enumerables if we have more enumerables than stages.
-        producers = start_enumerables(enumerables, mapper_ops, options, start_link)
-        {producers, producers, :none, window}
-
-      :none ->
-        # If there are no ops, just start the enumerables with the options.
-        producers = start_enumerables(enumerables, [], options, start_link)
-        {producers, producers, :none, window}
-
-      _ ->
-        # Otherwise it is a regular producer consumer with demand dispatcher.
-        # In this case, options is used by subsequent mapper/reducer stages.
-        producers = start_enumerables(enumerables, [], [], start_link)
-        {producers, producers, ops, window}
-    end
+    producers = start_enumerables(enumerables, streamer_opts, start_link)
+    {producers, producers, ops, window}
   end
 
-  defp start_enumerables(enumerables, ops, opts, start_link) do
+  defp start_enumerables(enumerables, opts, start_link) do
     supervisor_opts = Keyword.take(opts, @supervisor_opts)
     opts = [demand: :accumulate] ++ Keyword.take(opts, @map_reducer_opts)
 
     for enumerable <- enumerables do
-      fold_fun = fn {:mapper, fun, args}, acc ->
-        apply(Stream, fun, [acc | args])
-      end
-
-      stream = :lists.foldl(fold_fun, enumerable, ops)
-      {:ok, pid} = start_link.(streamer_spec(stream, opts, supervisor_opts))
+      {:ok, pid} = start_link.(streamer_spec(enumerable, opts, supervisor_opts))
       {pid, []}
     end
   end
