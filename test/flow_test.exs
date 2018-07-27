@@ -423,7 +423,7 @@ defmodule FlowTest do
       assert Enum.sort(flow) == [6, 10, 14]
     end
 
-    test "allows custom windowding" do
+    test "allows custom windowing" do
       window =
         Flow.Window.fixed(1, :second, fn
           x when x <= 50 -> 0
@@ -1036,7 +1036,7 @@ defmodule FlowTest do
              |> Enum.sort() == [[1, 2, 4, 5], [3, 6]]
     end
 
-    test "allows custom windowding" do
+    test "allows custom windowing" do
       window =
         Flow.Window.fixed(1, :second, fn
           x when x <= 50 -> 0
@@ -1193,7 +1193,7 @@ defmodule FlowTest do
              |> Enum.sort() == [0, 0, 0, 10100]
     end
 
-    test "allows custom windowding" do
+    test "allows custom windowing" do
       window =
         Flow.Window.fixed(1, :second, fn
           x when x <= 100 -> 0
@@ -1229,7 +1229,7 @@ defmodule FlowTest do
              |> Enum.sum() == 10100
     end
 
-    test "allows custom windowding" do
+    test "allows custom windowing" do
       window =
         Flow.Window.fixed(1, :second, fn
           x when x <= 100 -> 0
