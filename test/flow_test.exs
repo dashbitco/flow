@@ -432,7 +432,11 @@ defmodule FlowTest do
 
       windows =
         Flow.from_enumerable(1..100, window: window, stages: 4, max_demand: 5)
-        |> Flow.reduce(fn -> 0 end, &(&1 + &2))
+        |> Flow.reduce(fn -> 0 end, fn n, acc ->
+          # slowing down the flow a bit in order to make it more deterministic
+          Process.sleep(1)
+          n + acc
+        end)
         |> Flow.on_trigger(&{[&1], &1})
         |> Enum.to_list()
 
