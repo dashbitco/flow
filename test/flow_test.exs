@@ -1576,11 +1576,10 @@ defmodule FlowTest do
     end
   end
 
-
   describe "stage naming" do
     test "start_link/2 with :name", config do
       {:ok, pid} =
-        Stream.cycle([1,2,3])
+        Stream.cycle([1, 2, 3])
         |> Flow.from_enumerable(stages: 1)
         |> Flow.map(&(&1 + 1))
         |> Flow.partition(stages: 2)
@@ -1599,29 +1598,9 @@ defmodule FlowTest do
       assert Process.whereis(String.to_atom(flowname <> "_p1_2")) == nil
     end
 
-    test "start_link/2 with name: :auto " do
-      {:ok, pid} =
-        Stream.cycle([1,2,3])
-        |> Flow.from_enumerable(stages: 1)
-        |> Flow.map(&(&1 + 1))
-        |> Flow.partition(stages: 2)
-        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
-        |> Flow.start_link(name: :auto)
-      flowname = "flow0"
-      assert Process.whereis(String.to_atom(flowname)) == pid
-      assert Process.whereis(String.to_atom(flowname <> "_sup")) != nil
-
-      assert Process.whereis(String.to_atom(flowname <> "_p0_0")) != nil
-      assert Process.whereis(String.to_atom(flowname <> "_p0_1")) == nil
-
-      assert Process.whereis(String.to_atom(flowname <> "_p1_0")) != nil
-      assert Process.whereis(String.to_atom(flowname <> "_p1_1")) != nil
-      assert Process.whereis(String.to_atom(flowname <> "_p1_2")) == nil
-    end
-
     test "start_link/2 with :name  and naming a partition", config do
       {:ok, pid} =
-        Stream.cycle([1,2,3])
+        Stream.cycle([1, 2, 3])
         |> Flow.from_enumerable(stages: 1)
         |> Flow.map(&(&1 + 1))
         |> Flow.partition(stages: 2, name: :output)
@@ -1642,7 +1621,7 @@ defmodule FlowTest do
 
     test "start_link/2 with :name  and naming all partitions", config do
       {:ok, pid} =
-        Stream.cycle([1,2,3])
+        Stream.cycle([1, 2, 3])
         |> Flow.from_enumerable(stages: 1, name: :input)
         |> Flow.map(&(&1 + 1))
         |> Flow.partition(stages: 2, name: :output)
@@ -1661,5 +1640,4 @@ defmodule FlowTest do
       assert Process.whereis(String.to_atom(flowname <> "_output_2")) == nil
     end
   end
-
 end
