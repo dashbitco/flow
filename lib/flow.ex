@@ -367,12 +367,6 @@ defmodule Flow do
         [:myflow_p0_0 ]                         # First partition stage (input stage)
         [:myflow_p1_0] [:myflow_p1_1]           # Second partition stages
 
-
-  In applications using multiple flows, it is also possible to get automatic
-  unique names for the flows themselves by specifying [name: :auto]
-  resulting in  [:flow0, :flow1, ...]
-
-
   When using named flows, partition names can be explicitly specified using
   the :name option on statements that effectively create partition processes
   like `partition/2`, `from_stages/2` and  `from_enumerables/2`
@@ -607,7 +601,7 @@ defmodule Flow do
 
     * `:window` - a window to run the next stages in, see `Flow.Window`
     * `:stages` - the number of stages
-    * `:name` - the name for the stages in the namespace of the flow,
+    * `:name` - the name for the stages in this partition,
       requires the flow to be 'named'
     * `:buffer_keep` - how the buffer should behave, see `c:GenStage.init/1`
     * `:buffer_size` - how many events to buffer, see `c:GenStage.init/1`
@@ -651,7 +645,7 @@ defmodule Flow do
 
     * `:window` - a window to run the next stages in, see `Flow.Window`
     * `:stages` - the number of stages
-    * `:name` - the name for the stages in the namespace of the flow,
+    * `:name` - the name for the stages in this partition,
       requires the flow to be 'named'
     * `:buffer_keep` - how the buffer should behave, see `c:GenStage.init/1`
     * `:buffer_size` - how many events to buffer, see `c:GenStage.init/1`
@@ -1051,9 +1045,7 @@ defmodule Flow do
   ## Options
 
     * `:name` - the name of the flow
-      When non-nill, all processes created within the flow get default names
-      in this namespace.
-      Specify [name: :auto] to get automatically generated flownames [:flow0, :flow1, ...]
+      When non-nil, all processes created within the flow get default names
 
     * `:demand` - configures the demand on the flow producers to `:forward`
       or `:accumulate`. The default is `:forward`. See `GenStage.demand/2`
@@ -1306,7 +1298,7 @@ defmodule Flow do
     * `:window` - a `Flow.Window` struct which controls how the
        reducing function behaves, see `Flow.Window` for more information.
     * `:stages` - the number of partitions (reducer stages)
-    * `:name` - the name for the stages in the namespace of the flow,
+    * `:name` - the name for the stages in the partition,
       requires the flow to be 'named'
     * `:shutdown` - the shutdown time for this stage when the flow is shut down.
       The same as the `:shutdown` value in a Supervisor, defaults to 5000 milliseconds.
@@ -1461,7 +1453,7 @@ defmodule Flow do
     * `:window` - a `Flow.Window` struct which controls how the
        reducing function behaves, see `Flow.Window` for more information.
     * `:stages` - the number of partitions (reducer stages)
-    * `:name` - the name for the stages in the namespace of the flow,
+    * `:name` - the name for the stages in the partition,
       requires the flow to be 'named'
     * `:shutdown` - the shutdown time for this stage when the flow is shut down.
       The same as the `:shutdown` value in a Supervisor, defaults to 5000 milliseconds.
@@ -1484,7 +1476,7 @@ defmodule Flow do
     * `:window` - a `Flow.Window` struct which controls how the
        reducing function behaves, see `Flow.Window` for more information.
     * `:stages` - the number of partitions (reducer stages)
-    * `:name` - the name for the stages in the namespace of the flow,
+    * `:name` - the name for the stages in the partition,
       requires the flow to be 'named'
     * `:shutdown` - the shutdown time for this stage when the flow is shut down.
       The same as the `:shutdown` value in a Supervisor, defaults to 5000 milliseconds.
@@ -1508,17 +1500,22 @@ defmodule Flow do
   end
 
   defp index_flows(flows) when length(flows) == 1, do: flows
+
   defp index_flows(flows) do
-    Enum.with_index(flows) |> Enum.map(fn {flow, index} -> %Flow{flow | options: Keyword.put(flow.options, :index, index)} end)
+    Enum.with_index(flows)
+    |> Enum.map(fn {flow, index} ->
+      %Flow{flow | options: Keyword.put(flow.options, :index, index)}
+    end)
   end
 
   defp partition_id(options) do
     options |> Keyword.put(:partition_id, 0)
   end
-  defp partition_id(options,[%Flow{options: opts} | _]) do
+
+  defp partition_id(options, [%Flow{options: opts} | _]) do
     case opts[:partition_id] do
       nil -> options |> Keyword.put(:partition_id, 0)
-      id  -> options |> Keyword.put(:partition_id, id + 1)
+      id -> options |> Keyword.put(:partition_id, id + 1)
     end
   end
 
