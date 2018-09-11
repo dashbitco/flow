@@ -3,10 +3,12 @@ defmodule Flow.Coordinator do
   use GenServer
 
   def start_link(flow, type, consumers, options) do
+    options = naming(options)
     GenServer.start_link(__MODULE__, {flow, type, consumers, options}, options)
   end
 
   def start(flow, type, consumers, options) do
+    options = naming(options)
     GenServer.start(__MODULE__, {flow, type, consumers, options}, options)
   end
 
@@ -19,10 +21,11 @@ defmodule Flow.Coordinator do
   def init({flow, type, {inner_or_outer, consumers}, options}) do
     Process.flag(:trap_exit, true)
     type_options = Keyword.take(options, [:dispatcher])
-
-    {:ok, supervisor} = start_supervisor()
+    flowname = options[:name]
+    supervisor_name = flowname && String.to_atom("#{flowname}_sup")
+    {:ok, supervisor} = start_supervisor(supervisor_name)
     start_link = &start_child(supervisor, &1, restart: :temporary)
-    {producers, intermediary} = Flow.Materialize.materialize(flow, start_link, type, type_options)
+    {producers, intermediary} = Flow.Materialize.materialize(flow, start_link, type, type_options, flowname)
 
     demand = Keyword.get(options, :demand, :forward)
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
@@ -55,13 +58,33 @@ defmodule Flow.Coordinator do
     {:ok, state}
   end
 
+  defp naming(options) do
+    case options[:name] do
+      nil   -> options
+      :auto -> Keyword.put(options, :name, auto_flowname())
+      _name -> options
+    end
+
+  end
+
+  defp auto_flowname(flow_index\\0) do
+    name = String.to_atom("flow#{flow_index}")
+    case Process.whereis(name) do
+      nil  -> name
+      _pid -> auto_flowname(flow_index + 1)
+    end
+  end
+
   # We have a supervisor for the whole flow. We always wait for an error
   # to propagate through the whole flow, and then we terminate. For this
   # to work all children are started as temporary, except the consumers
   # given via into_specs. Once those crash, they terminate the whole
   # flow according to their restart type.
-  defp start_supervisor do
+  defp start_supervisor(nil) do
     Supervisor.start_link([], strategy: :one_for_one, max_restarts: 0)
+  end
+  defp start_supervisor(name) do
+    Supervisor.start_link([], strategy: :one_for_one, max_restarts: 0, name: name)
   end
 
   defp start_child(supervisor, spec, opts) do

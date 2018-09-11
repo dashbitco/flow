@@ -5,21 +5,21 @@ defmodule Flow.Materialize do
   @map_reducer_opts [:buffer_keep, :buffer_size, :dispatcher]
   @supervisor_opts [:shutdown]
 
-  def materialize(%Flow{producers: nil}, _, _, _) do
+  def materialize(%Flow{producers: nil}, _, _, _,_) do
     raise ArgumentError,
           "cannot execute a flow without producers, " <>
             "please call \"from_enumerable\", \"from_stages\" or \"from_specs\" accordingly"
   end
 
-  def materialize(%Flow{} = flow, start_link, type, type_options) do
+  def materialize(%Flow{} = flow, start_link, type, type_options, flowname) do
     %{operations: operations, options: options, producers: producers, window: window} = flow
     options = Keyword.merge(type_options, options)
     ops = split_operations(operations)
 
     {producers, consumers, ops, window} =
-      start_producers(producers, ops, start_link, window, options)
+      start_producers(producers, ops, start_link, window, options, flowname)
 
-    {producers, start_stages(ops, window, consumers, start_link, type, options)}
+    {producers, start_stages(ops, window, consumers, start_link, type, options, flowname)}
   end
 
   ## Helpers
@@ -40,7 +40,7 @@ defmodule Flow.Materialize do
     end
   end
 
-  defp start_stages(:none, window, producers, _start_link, _type, _options) do
+  defp start_stages(:none, window, producers, _start_link, _type, _options, _flowname) do
     if window != Flow.Window.global() do
       raise ArgumentError, "a window was set but no computation is happening on this partition"
     end
@@ -50,12 +50,18 @@ defmodule Flow.Materialize do
     end
   end
 
-  defp start_stages({_mr, compiled_ops, _ops}, window, producers, start_link, type, opts) do
+  defp start_stages({_mr, compiled_ops, _ops}, window, producers, start_link, type, opts, flowname) do
     {acc, reducer, trigger} = window_ops(window, compiled_ops, opts)
-
     {stages, opts} = Keyword.pop(opts, :stages)
+    {name, opts} = Keyword.pop(opts, :name)
+    {partition_id, opts} = Keyword.pop(opts, :partition_id)
+    {index, opts} = Keyword.pop(opts, :index)
     {supervisor_opts, opts} = Keyword.split(opts, @supervisor_opts)
     {init_opts, subscribe_opts} = Keyword.split(opts, @map_reducer_opts)
+    if name && ! flowname do
+      raise ArgumentError, "a partition is named '#{name}', this requires flow naming, either specific or using :auto"
+    end
+    partition_name = name || "p#{partition_id}"
 
     init_opts =
       case type do
@@ -69,19 +75,28 @@ defmodule Flow.Materialize do
           opts = Keyword.merge(subscribe_opts, producer_opts)
           {producer, [partition: i, cancel: :transient] ++ opts}
         end
-
       arg = {type, [subscribe_to: subscriptions] ++ init_opts, {i, stages}, trigger, acc, reducer}
-      {:ok, pid} = start_link.(map_reducer_spec(arg, supervisor_opts))
+      {:ok, pid} = start_link.(map_reducer_spec(arg, child_opts(flowname, index, partition_name, i), supervisor_opts))
       {pid, [cancel: :transient]}
     end
   end
 
-  defp map_reducer_spec(arg, supervisor_opts) do
+  defp child_opts(nil, _index, _partition_name, _stage), do: []
+  defp child_opts(_flowname, _index, nil, _stage), do: []
+  defp child_opts(flowname, index, partition_name, stage) do
+    [ name: [flowname, index, partition_name, stage]
+               |> Enum.filter(&(&1))
+               |> Enum.join("_")
+               |> String.to_atom
+    ]
+  end
+
+  defp map_reducer_spec(arg, child_opts,  supervisor_opts) do
     shutdown = Keyword.get(supervisor_opts, :shutdown, 5000)
 
     %{
       id: Flow.MapReducer,
-      start: {GenStage, :start_link, [Flow.MapReducer, arg, []]},
+      start: {GenStage, :start_link, [Flow.MapReducer, arg, child_opts]},
       modules: [Flow.MapReducer],
       shutdown: shutdown
     }
@@ -94,13 +109,14 @@ defmodule Flow.Materialize do
          ops,
          start_link,
          window,
-         options
+         options,
+         flowname
        ) do
     partitions = Keyword.fetch!(options, :stages)
-    {left_producers, left_consumers} = start_join(:left, left, left_key, partitions, start_link)
+    {left_producers, left_consumers} = start_join(:left, left, left_key, partitions, start_link, flowname)
 
     {right_producers, right_consumers} =
-      start_join(:right, right, right_key, partitions, start_link)
+      start_join(:right, right, right_key, partitions, start_link, flowname)
 
     {type, {acc, fun, trigger}, ops} = ensure_ops(ops)
 
@@ -121,9 +137,10 @@ defmodule Flow.Materialize do
          ops,
          start_link,
          window,
-         options
+         options,
+         flowname
        ) do
-    {producers, consumers} = materialize(flow, start_link, :producer_consumer, options)
+    {producers, consumers} = materialize(flow, start_link, :producer_consumer, options, flowname)
     {type, {acc, fun, trigger}, ops} = ensure_ops(ops)
 
     stages = Keyword.fetch!(flow.options, :stages)
@@ -134,19 +151,19 @@ defmodule Flow.Materialize do
      window}
   end
 
-  defp start_producers({:flows, flows}, ops, start_link, window, options) do
+  defp start_producers({:flows, flows}, ops, start_link, window, options, flowname) do
     options = partition(options)
 
     {producers, consumers} =
       Enum.reduce(flows, {[], []}, fn flow, {producers_acc, consumers_acc} ->
-        {producers, consumers} = materialize(flow, start_link, :producer_consumer, options)
+        {producers, consumers} = materialize(flow, start_link, :producer_consumer, options, flowname)
         {producers ++ producers_acc, consumers ++ consumers_acc}
       end)
 
     {producers, consumers, ensure_ops(ops), window}
   end
 
-  defp start_producers({:from_stages, producers}, ops, start_link, window, options) do
+  defp start_producers({:from_stages, producers}, ops, start_link, window, options, _flowname) do
     producers = producers.(start_link)
 
     # If there are no ops and there is a need for a custom
@@ -163,9 +180,10 @@ defmodule Flow.Materialize do
          ops,
          start_link,
          window,
-         options
+         options,
+         flowname
        ) do
-    {producers, intermediary} = materialize(flow, start_link, :producer_consumer, options)
+    {producers, intermediary} = materialize(flow, start_link, :producer_consumer, options, flowname)
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
 
     producers_consumers = producers_consumers.(start_link)
@@ -182,7 +200,7 @@ defmodule Flow.Materialize do
     {producers, producers_consumers, ensure_ops(ops), window}
   end
 
-  defp start_producers({:enumerables, enumerables}, ops, start_link, window, options) do
+  defp start_producers({:enumerables, enumerables}, ops, start_link, window, options, _flowname) do
     # If there are no ops, just start the enumerables with the options.
     # Otherwise it is a regular producer consumer with demand dispatcher.
     # In this case, options is used by subsequent mapper/reducer stages.
@@ -341,14 +359,14 @@ defmodule Flow.Materialize do
 
   ## Joins
 
-  defp start_join(side, flow, key_fun, stages, start_link) do
+  defp start_join(side, flow, key_fun, stages, start_link, flowname) do
     hash = fn event ->
       key = key_fun.(event)
       {{key, event}, :erlang.phash2(key, stages)}
     end
 
     opts = [dispatcher: {GenStage.PartitionDispatcher, partitions: 0..(stages - 1), hash: hash}]
-    {producers, consumers} = materialize(flow, start_link, :producer_consumer, opts)
+    {producers, consumers} = materialize(flow, start_link, :producer_consumer, opts, flowname)
 
     consumers =
       for {consumer, consumer_opts} <- consumers do
