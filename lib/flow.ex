@@ -787,7 +787,7 @@ defmodule Flow do
             {:stop, :shutdown, state}
           end
 
-  Given the complexitity in guaranteeing termination, we recommend
+  Given the complexity in guaranteeing termination, we recommend
   developers to use `through_stages/3` and `through_specs/3` only
   when subscribing to unbounded (infinite) flows.
 
@@ -1093,7 +1093,7 @@ defmodule Flow do
        end
        ```
 
-  Given the complexitity in guaranteeing termination, we recommend
+  Given the complexity in guaranteeing termination, we recommend
   developers to use `into_stages/3` and `into_specs/3` only
   when subscribing to unbounded (infinite) flows.
   """
