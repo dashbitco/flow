@@ -616,7 +616,7 @@ defmodule Flow do
 
   `producers` are already running stages that have type `:producer`
   or `:producer_consumer`. If instead you want the producers to be
-  started alongisde the flow, see `from_specs/2` instead.
+  started alongside the flow, see `from_specs/2` instead.
 
   ## Options
 
@@ -737,7 +737,7 @@ defmodule Flow do
   `:producer_consumer`. Each element represents the consumer or a
   tuple with the consumer and the subscription options as defined
   in `GenStage.sync_subscribe/2`. If instead you want the producer
-  consumers to be started alongisde the flow, see `through_specs/3`
+  consumers to be started alongside the flow, see `through_specs/3`
   instead.
 
   You are required to pass an existing `flow` and it returns a new
@@ -1045,7 +1045,7 @@ defmodule Flow do
   `:consumer` or `:producer_consumer`. Each element represents the
   consumer or a tuple with the consumer and the subscription options
   as defined in `GenStage.sync_subscribe/2`. If instead you want the
-  consumers to be started alongisde the flow, see `into_specs/3`
+  consumers to be started alongside the flow, see `into_specs/3`
   instead.
 
   The `pid` returned by this function identifies a coordinator
