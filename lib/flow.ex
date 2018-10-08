@@ -25,7 +25,7 @@ defmodule Flow do
   This module doc will cover the main constructs and concepts behind
   Flow, with examples. There is also a presentation about GenStage
   and Flow from José Valim at ElixirConf 2016, which covers
-  data processing concepts for those unfamilar with the domain:
+  data processing concepts for those unfamiliar with the domain:
   <https://youtu.be/srtMWzyqdp8?t=244>
 
   ## Example
