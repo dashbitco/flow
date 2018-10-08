@@ -287,7 +287,7 @@ defmodule Flow do
   works. While windows and triggers allow us to control when data is
   emitted, note that data can be emitted at any time during the reducing
   step by using `emit_and_reduce/3`. In truth, all window and trigger
-  functinality provided by Flow can also be built by hand using the
+  functionality provided by Flow can also be built by hand using the
   `emit_and_reduce/3` and `on_trigger/2` functions.
 
   See `Flow.Window` for a complete introduction to windows and triggers.
