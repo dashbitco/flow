@@ -25,7 +25,7 @@ defmodule Flow do
   This module doc will cover the main constructs and concepts behind
   Flow, with examples. There is also a presentation about GenStage
   and Flow from José Valim at ElixirConf 2016, which covers
-  data processing concepts for those unfamilar with the domain:
+  data processing concepts for those unfamiliar with the domain:
   <https://youtu.be/srtMWzyqdp8?t=244>
 
   ## Example
@@ -287,7 +287,7 @@ defmodule Flow do
   works. While windows and triggers allow us to control when data is
   emitted, note that data can be emitted at any time during the reducing
   step by using `emit_and_reduce/3`. In truth, all window and trigger
-  functinality provided by Flow can also be built by hand using the
+  functionality provided by Flow can also be built by hand using the
   `emit_and_reduce/3` and `on_trigger/2` functions.
 
   See `Flow.Window` for a complete introduction to windows and triggers.
@@ -616,7 +616,7 @@ defmodule Flow do
 
   `producers` are already running stages that have type `:producer`
   or `:producer_consumer`. If instead you want the producers to be
-  started alongisde the flow, see `from_specs/2` instead.
+  started alongside the flow, see `from_specs/2` instead.
 
   ## Options
 
@@ -737,7 +737,7 @@ defmodule Flow do
   `:producer_consumer`. Each element represents the consumer or a
   tuple with the consumer and the subscription options as defined
   in `GenStage.sync_subscribe/2`. If instead you want the producer
-  consumers to be started alongisde the flow, see `through_specs/3`
+  consumers to be started alongside the flow, see `through_specs/3`
   instead.
 
   You are required to pass an existing `flow` and it returns a new
@@ -787,7 +787,7 @@ defmodule Flow do
             {:stop, :shutdown, state}
           end
 
-  Given the complexitity in guaranteeing termination, we recommend
+  Given the complexity in guaranteeing termination, we recommend
   developers to use `through_stages/3` and `through_specs/3` only
   when subscribing to unbounded (infinite) flows.
 
@@ -1045,7 +1045,7 @@ defmodule Flow do
   `:consumer` or `:producer_consumer`. Each element represents the
   consumer or a tuple with the consumer and the subscription options
   as defined in `GenStage.sync_subscribe/2`. If instead you want the
-  consumers to be started alongisde the flow, see `into_specs/3`
+  consumers to be started alongside the flow, see `into_specs/3`
   instead.
 
   The `pid` returned by this function identifies a coordinator
@@ -1093,7 +1093,7 @@ defmodule Flow do
        end
        ```
 
-  Given the complexitity in guaranteeing termination, we recommend
+  Given the complexity in guaranteeing termination, we recommend
   developers to use `into_stages/3` and `into_specs/3` only
   when subscribing to unbounded (infinite) flows.
   """
