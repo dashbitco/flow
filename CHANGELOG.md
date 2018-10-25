@@ -1,5 +1,12 @@
 # Changelog
 
+## v0.14.3 (2018-10-25)
+
+  * Bug fixes
+    * Don't fuse mappers into enumerables (#62)
+    * Trap exits to ensure event completion on shutdown
+    * Fix `flat_map` followed by `emit_and_reduce` (#68)
+
 ## v0.14.2 (2018-07-24)
 
   * Bug fixes
