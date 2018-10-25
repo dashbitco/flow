@@ -587,12 +587,16 @@ defmodule Flow.Materialize do
     reducer = reducer_from_mappers(mappers)
 
     emit_and_reducer = fn event, {events, acc} ->
-      :lists.foldl(fn x, {events, acc} ->
-        case fun.(x, acc) do
-          {[], acc} -> {events, acc}
-          {current, acc} -> {[current | events], acc}
-        end
-      end, {events, acc}, reducer.(event, []))
+      :lists.foldl(
+        fn x, {events, acc} ->
+          case fun.(x, acc) do
+            {[], acc} -> {events, acc}
+            {current, acc} -> {[current | events], acc}
+          end
+        end,
+        {events, acc},
+        reducer.(event, [])
+      )
     end
 
     fn _ref, events, acc, _index ->
