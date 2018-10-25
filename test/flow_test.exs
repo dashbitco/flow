@@ -227,6 +227,28 @@ defmodule FlowTest do
       assert Enum.sort(flow) == [6, 10, 14]
     end
 
+    test "reduce/3" do
+      assert @flow
+             |> Flow.reduce(fn -> 0 end, &+/2)
+             |> Flow.on_trigger(&{[&1], &1})
+             |> Enum.sum() == 21
+    end
+
+    test "emit_and_reduce/3" do
+      assert @flow
+             |> Flow.emit_and_reduce(fn -> 0 end, &{[&1], &1 + &2})
+             |> Flow.on_trigger(&{[&1], &1})
+             |> Enum.sum() == 42
+    end
+
+    test "flat_map/2 + emit_and_reduce/3" do
+      assert @flow
+             |> Flow.flat_map(&[&1, &1])
+             |> Flow.emit_and_reduce(fn -> 0 end, &{[&1], &1 + &2})
+             |> Flow.on_trigger(&{[&1], &1})
+             |> Enum.sum() == 84
+    end
+
     test "start_link/2" do
       parent = self()
 
