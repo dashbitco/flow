@@ -587,30 +587,6 @@ defmodule Flow do
           "from_enumerables/2 expects a non-empty list as argument, got: #{inspect(enumerables)}"
   end
 
-  @doc false
-  @deprecated "Use from_stages([stage], opts) instead"
-  def from_stage(stage, options \\ []) do
-    from_stages([stage], options)
-  end
-
-  @doc false
-  @deprecated "Use Flow.filter/2 and Flow.map/2 instead"
-  def filter_map(flow, filter, mapper) when is_function(filter, 1) and is_function(mapper, 1) do
-    add_mapper(flow, :filter_map, [filter, mapper])
-  end
-
-  @doc false
-  def merge(flow_or_flows) do
-    IO.warn("Flow.merge/1 is deprecated, use Flow.merge/3 or Flow.partition/2")
-    merge(flow_or_flows, GenStage.PartitionDispatcher, [])
-  end
-
-  @doc false
-  def merge(flow_or_flows, options) when is_list(options) do
-    IO.warn("Flow.merge/1 is deprecated, use Flow.merge/3 or Flow.partition/2")
-    merge(flow_or_flows, GenStage.PartitionDispatcher, options)
-  end
-
   @doc """
   Creates a flow with a list of already running stages as `producers`.
 

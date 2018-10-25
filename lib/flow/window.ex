@@ -257,7 +257,7 @@ defmodule Flow.Window do
   @type t :: %{required(:trigger) => {fun(), fun()} | nil, required(:periodically) => [trigger]}
 
   @typedoc "The supported window types."
-  @type type :: :global | :fixed | :session | :periodic | :count | any()
+  @type type :: :global | :fixed | :periodic | :count | any()
 
   @typedoc """
   A function that returns the event time to window by.
@@ -350,12 +350,6 @@ defmodule Flow.Window do
   @spec fixed(pos_integer, time_unit, (t -> pos_integer)) :: t
   def fixed(count, unit, by) when is_integer(count) and count > 0 and is_function(by, 1) do
     %Flow.Window.Fixed{duration: to_ms(count, unit), by: by}
-  end
-
-  @doc false
-  @deprecated "Use emit_and_reduce/3 and on_trigger/2 to build your own window instead"
-  def session(count, unit, by) when is_integer(count) and count > 0 and is_function(by, 1) do
-    %Flow.Window.Session{gap: to_ms(count, unit), by: by}
   end
 
   @doc """
