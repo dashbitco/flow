@@ -1,4 +1,4 @@
-# Flow [![Build Status](https://travis-ci.org/elixir-lang/flow.svg?branch=master)](https://travis-ci.org/elixir-lang/flow)
+# Flow [![Build Status](https://travis-ci.org/plataformatec/flow.svg?branch=master)](https://travis-ci.org/plataformatec/flow)
 
 `Flow` allows developers to express computations on collections, similar to the `Enum` and `Stream` modules, although computations will be executed in parallel using multiple [`GenStage`](https://github.com/elixir-lang/gen_stage)s.
 

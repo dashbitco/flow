@@ -15,7 +15,7 @@ defmodule Flow.Mixfile do
       docs: [
         main: "Flow",
         source_ref: "v#{@version}",
-        source_url: "https://github.com/elixir-lang/flow"
+        source_url: "https://github.com/plataformatec/flow"
       ]
     ]
   end
@@ -35,7 +35,7 @@ defmodule Flow.Mixfile do
     %{
       licenses: ["Apache 2"],
       maintainers: ["José Valim", "James Fish"],
-      links: %{"GitHub" => "https://github.com/elixir-lang/flow"}
+      links: %{"GitHub" => "https://github.com/plataformatec/flow"}
     }
   end
 end
