@@ -31,7 +31,7 @@ defmodule Flow do
   ## Example
 
   As an example, let's implement the classic word counting
-  algorithm using flow. The word counting program will receive
+  algorithm using Flow. The word counting program will receive
   one file and count how many times each word appears in the
   document. Using the `Enum` module it could be implemented
   as follows:
@@ -252,7 +252,7 @@ defmodule Flow do
   been processed. In this case, the accumulator returned by
   `on_trigger/2` won't be used, only the events it emits.
 
-  However, flow provides many conveniences for working with
+  However, Flow provides many conveniences for working with
   unbound data, allowing us to set windows, time-based triggers,
   element counters and more.
 
