@@ -280,7 +280,7 @@ defmodule Flow do
   while the data streams through the system, regardless of whether
   the data is bounded or unbounded. Every time a trigger is invoked,
   the `on_trigger/2` callback of that partition is invoked, allowing
-  us to control which events to emit and the accumulator to be used
+  us to control which events to emit and what accumulator to use for
   the next time the partition starts reducing data.
 
   Windows and triggers effectively control how the `reduce/3` function
