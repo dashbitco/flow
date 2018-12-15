@@ -246,7 +246,7 @@ defmodule Flow do
 
   The answer here lies in triggers. Every partition may have a
   `on_trigger/2` callback which receives the partition accumulator
-  and returns the events to the emit and the accumulator to be
+  and returns the events to be emitted and the accumulator to be
   used after the trigger. All flows have at least one trigger:
   the `:done` trigger which is emitted when all the data has
   been processed. In this case, the accumulator returned by
