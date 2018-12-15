@@ -31,7 +31,7 @@ defmodule Flow do
   ## Example
 
   As an example, let's implement the classic word counting
-  algorithm using flow. The word counting program will receive
+  algorithm using Flow. The word counting program will receive
   one file and count how many times each word appears in the
   document. Using the `Enum` module it could be implemented
   as follows:
@@ -246,13 +246,13 @@ defmodule Flow do
 
   The answer here lies in triggers. Every partition may have a
   `on_trigger/2` callback which receives the partition accumulator
-  and returns the events to the emit and the accumulator to be
+  and returns the events to be emitted and the accumulator to be
   used after the trigger. All flows have at least one trigger:
-  the `:done` trigger which is emitted when all the data has
+  the `:done` trigger which is executed when all the data has
   been processed. In this case, the accumulator returned by
   `on_trigger/2` won't be used, only the events it emits.
 
-  However, flow provides many conveniences for working with
+  However, Flow provides many conveniences for working with
   unbound data, allowing us to set windows, time-based triggers,
   element counters and more.
 
@@ -280,7 +280,7 @@ defmodule Flow do
   while the data streams through the system, regardless of whether
   the data is bounded or unbounded. Every time a trigger is invoked,
   the `on_trigger/2` callback of that partition is invoked, allowing
-  us to control which events to emit and the accumulator to be used
+  us to control which events to emit and what accumulator to use for
   the next time the partition starts reducing data.
 
   Windows and triggers effectively control how the `reduce/3` function
