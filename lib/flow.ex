@@ -678,7 +678,7 @@ defmodule Flow do
       Flow.from_specs(specs)
 
   """
-  @spec from_specs([Supervisor.child_spec()], keyword()) :: t
+  @spec from_specs([Supervisor.child_spec() | | {module(), term()} | module()], keyword()) :: t
   def from_specs(producers, options \\ [])
 
   def from_specs([_ | _] = producers, options) do
