@@ -713,16 +713,6 @@ defmodule Flow.Materialize do
     end
   end
 
-  defp mapper({:mapper, :filter_map, [filter, mapper]}, fun) do
-    fn x, acc ->
-      if filter.(x) do
-        fun.(mapper.(x), acc)
-      else
-        acc
-      end
-    end
-  end
-
   defp mapper({:mapper, :flat_map, [flat_mapper]}, fun) do
     fn x, acc ->
       Enum.reduce(flat_mapper.(x), acc, fun)

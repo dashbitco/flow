@@ -187,14 +187,6 @@ defmodule FlowTest do
       assert catch_exit(@flow |> Flow.map(fn _ -> raise "oops" end) |> Enum.to_list())
     end
 
-    test "each/2" do
-      parent = self()
-      assert @flow |> Flow.each(&send(parent, &1)) |> Enum.sort() == [1, 2, 3, 4, 5, 6]
-      assert_received 1
-      assert_received 2
-      assert_received 3
-    end
-
     test "filter/2" do
       assert @flow |> Flow.filter(&(rem(&1, 2) == 0)) |> Enum.sort() == [2, 4, 6]
     end
@@ -255,7 +247,7 @@ defmodule FlowTest do
       {:ok, pid} =
         @flow
         |> Flow.filter(&(rem(&1, 2) == 0))
-        |> Flow.each(&send(parent, &1))
+        |> Flow.map(&send(parent, &1))
         |> Flow.start_link()
 
       assert_receive 2
@@ -270,7 +262,7 @@ defmodule FlowTest do
     test "start_link/2 with :name", config do
       {:ok, pid} =
         @flow
-        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.map(fn _ -> Process.sleep(:infinity) end)
         |> Flow.start_link(name: config.test)
 
       assert Process.whereis(config.test) == pid
@@ -296,7 +288,7 @@ defmodule FlowTest do
 
       {:ok, pid} =
         @flow
-        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.map(fn _ -> Process.sleep(:infinity) end)
         |> Flow.into_stages([forwarder], name: config.test)
 
       assert Process.whereis(config.test) == pid
@@ -351,7 +343,7 @@ defmodule FlowTest do
     test "into_specs/3 with :name", config do
       {:ok, pid} =
         @flow
-        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.map(fn _ -> Process.sleep(:infinity) end)
         |> Flow.into_specs([{{Forwarder, self()}, []}], name: config.test)
 
       assert Process.whereis(config.test) == pid
@@ -472,7 +464,7 @@ defmodule FlowTest do
       {:ok, pid} =
         @flow
         |> Flow.filter(&(rem(&1, 2) == 0))
-        |> Flow.each(&send(parent, &1))
+        |> Flow.map(&send(parent, &1))
         |> Flow.start_link()
 
       assert_receive 2
@@ -487,7 +479,7 @@ defmodule FlowTest do
     test "start_link/2 with :name", config do
       {:ok, pid} =
         @flow
-        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.map(fn _ -> Process.sleep(:infinity) end)
         |> Flow.start_link(name: config.test)
 
       assert Process.whereis(config.test) == pid
@@ -510,7 +502,7 @@ defmodule FlowTest do
 
       {:ok, pid} =
         @flow
-        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.map(fn _ -> Process.sleep(:infinity) end)
         |> Flow.into_stages([forwarder], name: config.test)
 
       assert Process.whereis(config.test) == pid
@@ -565,7 +557,7 @@ defmodule FlowTest do
     test "into_specs/3 with :name", config do
       {:ok, pid} =
         @flow
-        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.map(fn _ -> Process.sleep(:infinity) end)
         |> Flow.into_specs([{{Forwarder, self()}, []}], name: config.test)
 
       assert Process.whereis(config.test) == pid
@@ -619,17 +611,6 @@ defmodule FlowTest do
     @tag :capture_log
     test "raises locally" do
       assert catch_exit(@flow |> Flow.map(fn _ -> raise "oops" end) |> Enum.to_list())
-    end
-
-    test "each/2" do
-      parent = self()
-
-      assert @flow |> Flow.each(&send(parent, &1)) |> Enum.sort() ==
-               [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-
-      assert_received 1
-      assert_received 2
-      assert_received 3
     end
 
     test "filter/2" do
@@ -718,7 +699,7 @@ defmodule FlowTest do
       {:ok, pid} =
         @flow
         |> Flow.filter(&(rem(&1, 2) == 0))
-        |> Flow.each(&send(parent, &1))
+        |> Flow.map(&send(parent, &1))
         |> Flow.start_link()
 
       assert_receive 2
@@ -733,7 +714,7 @@ defmodule FlowTest do
     test "start_link/2 with :name", config do
       {:ok, pid} =
         @flow
-        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.map(fn _ -> Process.sleep(:infinity) end)
         |> Flow.start_link(name: config.test)
 
       assert Process.whereis(config.test) == pid
@@ -759,7 +740,7 @@ defmodule FlowTest do
 
       {:ok, pid} =
         @flow
-        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.map(fn _ -> Process.sleep(:infinity) end)
         |> Flow.into_stages([forwarder], name: config.test)
 
       assert Process.whereis(config.test) == pid
@@ -843,7 +824,7 @@ defmodule FlowTest do
     test "into_specs/3 with :name", config do
       {:ok, pid} =
         @flow
-        |> Flow.each(fn _ -> Process.sleep(:infinity) end)
+        |> Flow.map(fn _ -> Process.sleep(:infinity) end)
         |> Flow.into_specs([{{Forwarder, self()}, []}], name: config.test)
 
       assert Process.whereis(config.test) == pid
@@ -919,19 +900,6 @@ defmodule FlowTest do
              |> Enum.sort() == [0, 1, 2, 3, 4]
     end
 
-    test "each/2", %{counter: pid} do
-      parent = self()
-
-      assert Flow.from_stages([pid], stages: 1)
-             |> Flow.each(&send(parent, &1))
-             |> Enum.take(5)
-             |> Enum.sort() == [0, 1, 2, 3, 4]
-
-      assert_received 1
-      assert_received 2
-      assert_received 3
-    end
-
     test "filter/2", %{counter: pid} do
       assert Flow.from_stages([pid], stages: 1)
              |> Flow.filter(&(rem(&1, 2) == 0))
@@ -977,19 +945,6 @@ defmodule FlowTest do
       assert Flow.from_specs(@specs, stages: 1)
              |> Enum.take(5)
              |> Enum.sort() == [0, 1, 2, 3, 4]
-    end
-
-    test "each/2" do
-      parent = self()
-
-      assert Flow.from_specs(@specs, stages: 1)
-             |> Flow.each(&send(parent, &1))
-             |> Enum.take(5)
-             |> Enum.sort() == [0, 1, 2, 3, 4]
-
-      assert_received 1
-      assert_received 2
-      assert_received 3
     end
 
     test "filter/2" do

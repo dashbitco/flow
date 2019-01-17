@@ -975,7 +975,7 @@ defmodule Flow do
   ## Examples
 
       iex> parent = self()
-      iex> [1, 2, 3] |> Flow.from_enumerable() |> Flow.each(&send(parent, &1)) |> Flow.run()
+      iex> [1, 2, 3] |> Flow.from_enumerable() |> Flow.map(&send(parent, &1)) |> Flow.run()
       :ok
       iex> receive do
       ...>   1 -> :ok
@@ -1120,21 +1120,7 @@ defmodule Flow do
 
   ## Mappers
 
-  @doc """
-  Applies the given function to each input without modifying it.
-
-  ## Examples
-
-      iex> parent = self()
-      iex> [1, 2, 3] |> Flow.from_enumerable() |> Flow.each(&send(parent, &1)) |> Enum.sort()
-      [1, 2, 3]
-      iex> receive do
-      ...>   1 -> :ok
-      ...> end
-      :ok
-
-  """
-  @spec each(t, (term -> term)) :: t
+  @deprecated "Use Flow.map/2 returning the input instead"
   def each(flow, each) when is_function(each, 1) do
     add_mapper(flow, :each, [each])
   end
