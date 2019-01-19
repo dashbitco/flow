@@ -19,10 +19,13 @@ defmodule Flow.Coordinator do
   def init({flow, type, {inner_or_outer, consumers}, options}) do
     Process.flag(:trap_exit, true)
     type_options = Keyword.take(options, [:dispatcher])
-
-    {:ok, supervisor} = start_supervisor()
+    flow_name = options[:name]
+    supervisor_name = flow_name && String.to_atom("#{flow_name}_sup")
+    {:ok, supervisor} = start_supervisor(supervisor_name)
     start_link = &start_child(supervisor, &1, restart: :temporary)
-    {producers, intermediary} = Flow.Materialize.materialize(flow, start_link, type, type_options)
+
+    {producers, intermediary} =
+      Flow.Materialize.materialize(flow, start_link, type, type_options, flow_name)
 
     demand = Keyword.get(options, :demand, :forward)
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
@@ -60,8 +63,12 @@ defmodule Flow.Coordinator do
   # to work all children are started as temporary, except the consumers
   # given via into_specs. Once those crash, they terminate the whole
   # flow according to their restart type.
-  defp start_supervisor do
+  defp start_supervisor(nil) do
     Supervisor.start_link([], strategy: :one_for_one, max_restarts: 0)
+  end
+
+  defp start_supervisor(name) do
+    Supervisor.start_link([], strategy: :one_for_one, max_restarts: 0, name: name)
   end
 
   defp start_child(supervisor, spec, opts) do
