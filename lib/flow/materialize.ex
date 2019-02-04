@@ -2,7 +2,7 @@ defmodule Flow.Materialize do
   @moduledoc false
 
   @compile :inline_list_funcs
-  @map_reducer_opts [:buffer_keep, :buffer_size, :dispatcher]
+  @map_reducer_opts [:buffer_keep, :buffer_size, :dispatcher, :on_init]
   @supervisor_opts [:shutdown]
 
   def materialize(%Flow{producers: nil}, _, _, _) do

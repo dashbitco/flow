@@ -1552,4 +1552,18 @@ defmodule FlowTest do
       assert_receive {:consumed, [1]}
     end
   end
+
+  describe "mapper_reducer" do
+    test "triggers on_init callback once for each stage" do
+      parent = self()
+
+      [1, 2, 3, 4]
+      |> Flow.from_enumerable(stages: 2, on_init: &send(parent, &1))
+      |> Flow.map(& &1)
+      |> Flow.run()
+
+      assert_receive {0, 2}
+      assert_receive {1, 2}
+    end
+  end
 end
