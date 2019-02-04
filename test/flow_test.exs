@@ -73,6 +73,12 @@ defmodule FlowTest do
     end
   end
 
+  defmodule MessageBucket do
+    def start_link, do: Agent.start_link(fn -> [] end)
+    def push(bucket, message), do: Agent.update(bucket, fn state -> [message | state] end)
+    def get_all(bucket), do: Agent.get(bucket, & &1) |> Enum.reverse()
+  end
+
   describe "on use" do
     test "defines a child_spec/2 function" do
       defmodule MyFlow do
@@ -1550,6 +1556,36 @@ defmodule FlowTest do
       refute_received {:consumed, [1]}
       assert GenStage.demand(pid, :forward)
       assert_receive {:consumed, [1]}
+    end
+  end
+
+  describe "mapper_reducer" do
+    @expected_messages [
+      "init_map_reducer called",
+      "init_map_reducer called",
+      "item mapped",
+      "item mapped",
+      "item mapped",
+      "item mapped"
+    ]
+
+    test "triggers init callback once for each stage" do
+      {:ok, bucket} = MessageBucket.start_link()
+
+      init = fn spec ->
+        MessageBucket.push(bucket, "init_map_reducer called")
+        spec
+      end
+
+      [1, 2, 3, 4]
+      |> Flow.from_enumerable(stages: 2, init_map_reducer: init)
+      |> Flow.map(fn item ->
+        MessageBucket.push(bucket, "item mapped")
+        item
+      end)
+      |> Flow.run()
+
+      assert @expected_messages == MessageBucket.get_all(bucket)
     end
   end
 end

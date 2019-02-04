@@ -4,6 +4,10 @@ defmodule Flow.MapReducer do
 
   def init({type, opts, index, trigger, acc, reducer}) do
     Process.flag(:trap_exit, true)
+
+    {init_map_reducer, opts} = Keyword.pop(opts, :init_map_reducer, & &1)
+    init_map_reducer.({type, opts, index, trigger, acc, reducer})
+
     {type, {%{}, build_status(type, trigger), index, acc.(), reducer}, opts}
   end
 
