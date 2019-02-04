@@ -563,7 +563,7 @@ defmodule Flow do
     * `:shutdown` - the shutdown time for this stage when the flow is shut down.
       The same as the `:shutdown` value in a Supervisor, defaults to 5000 milliseconds.
     * `:on_init` - a function invoked during the initialization of each stage.
-      The function receives a single argument in the for of `{i, total}` where:
+      The function receives a single argument in the form of `{i, total}` where:
       - `i` is the stage index
       - `total` is the total number of stages
 
