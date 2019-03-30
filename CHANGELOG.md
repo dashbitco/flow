@@ -18,7 +18,7 @@
 
   * Deprecations
     * `Flow.filter_map/3` is deprecated in favor of filter+map
-    * `Flow.from_stage/2` is deprecated in favor of `Flow.from_stages/3`
+    * `Flow.from_stage/2` is deprecated in favor of `Flow.from_stages/2`
     * `Flow.merge/2` is deprecated in favor of `Flow.partition/2` or `Flow.shuffle/2`
 
   * Enhancements
