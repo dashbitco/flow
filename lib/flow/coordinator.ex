@@ -22,17 +22,14 @@ defmodule Flow.Coordinator do
 
     {:ok, supervisor} = start_supervisor()
     start_link = &start_child(supervisor, &1, restart: :temporary)
-    {producers, intermediary} = Flow.Materialize.materialize(flow, start_link, type, type_options)
-
     demand = Keyword.get(options, :demand, :forward)
+
+    {producers, intermediary} =
+      Flow.Materialize.materialize(flow, demand, start_link, type, type_options)
+
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
     producers = Enum.map(producers, &elem(&1, 0))
-
     consumers = consumers.(&start_child(supervisor, &1, []))
-
-    if demand == :accumulate do
-      for producer <- producers, do: GenStage.demand(producer, demand)
-    end
 
     for {pid, _} <- intermediary, {consumer, opts} <- consumers do
       GenStage.sync_subscribe(consumer, [to: pid, cancel: :transient] ++ opts, timeout)

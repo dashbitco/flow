@@ -5,19 +5,23 @@ defmodule Flow.Materialize do
   @map_reducer_opts [:buffer_keep, :buffer_size, :dispatcher, :on_init]
   @supervisor_opts [:shutdown]
 
-  def materialize(%Flow{producers: nil}, _, _, _) do
+  def materialize(%Flow{producers: nil}, _, _, _, _) do
     raise ArgumentError,
           "cannot execute a flow without producers, " <>
             "please call \"from_enumerable\", \"from_stages\" or \"from_specs\" accordingly"
   end
 
-  def materialize(%Flow{} = flow, start_link, type, type_options) do
+  def materialize(%Flow{} = flow, demand, start_link, type, type_options) do
     %{operations: operations, options: options, producers: producers, window: window} = flow
     options = Keyword.merge(type_options, options)
     ops = split_operations(operations)
 
     {producers, consumers, ops, window} =
       start_producers(producers, ops, start_link, window, options)
+
+    if demand == :accumulate do
+      for {producer, _} <- producers, do: GenStage.demand(producer, demand)
+    end
 
     {producers, start_stages(ops, window, consumers, start_link, type, options)}
   end
@@ -123,7 +127,7 @@ defmodule Flow.Materialize do
          window,
          options
        ) do
-    {producers, consumers} = materialize(flow, start_link, :producer_consumer, options)
+    {producers, consumers} = materialize(flow, :forward, start_link, :producer_consumer, options)
     {type, {acc, fun, trigger}, ops} = ensure_ops(ops)
 
     stages = Keyword.fetch!(flow.options, :stages)
@@ -139,7 +143,7 @@ defmodule Flow.Materialize do
 
     {producers, consumers} =
       Enum.reduce(flows, {[], []}, fn flow, {producers_acc, consumers_acc} ->
-        {producers, consumers} = materialize(flow, start_link, :producer_consumer, options)
+        {producers, consumers} = materialize(flow, :forward, start_link, :producer_consumer, options)
         {producers ++ producers_acc, consumers ++ consumers_acc}
       end)
 
@@ -165,7 +169,7 @@ defmodule Flow.Materialize do
          window,
          options
        ) do
-    {producers, intermediary} = materialize(flow, start_link, :producer_consumer, options)
+    {producers, intermediary} = materialize(flow, :forward, start_link, :producer_consumer, options)
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
 
     producers_consumers = producers_consumers.(start_link)
@@ -348,7 +352,7 @@ defmodule Flow.Materialize do
     end
 
     opts = [dispatcher: {GenStage.PartitionDispatcher, partitions: 0..(stages - 1), hash: hash}]
-    {producers, consumers} = materialize(flow, start_link, :producer_consumer, opts)
+    {producers, consumers} = materialize(flow, :forward, start_link, :producer_consumer, opts)
 
     consumers =
       for {consumer, consumer_opts} <- consumers do
