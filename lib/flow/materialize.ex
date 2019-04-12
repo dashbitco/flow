@@ -143,7 +143,9 @@ defmodule Flow.Materialize do
 
     {producers, consumers} =
       Enum.reduce(flows, {[], []}, fn flow, {producers_acc, consumers_acc} ->
-        {producers, consumers} = materialize(flow, :forward, start_link, :producer_consumer, options)
+        {producers, consumers} =
+          materialize(flow, :forward, start_link, :producer_consumer, options)
+
         {producers ++ producers_acc, consumers ++ consumers_acc}
       end)
 
@@ -169,7 +171,9 @@ defmodule Flow.Materialize do
          window,
          options
        ) do
-    {producers, intermediary} = materialize(flow, :forward, start_link, :producer_consumer, options)
+    {producers, intermediary} =
+      materialize(flow, :forward, start_link, :producer_consumer, options)
+
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
 
     producers_consumers = producers_consumers.(start_link)
