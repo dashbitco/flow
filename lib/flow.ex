@@ -466,7 +466,7 @@ defmodule Flow do
            | {:from_stages, (fun() -> [{GenStage.stage(), keyword}])}
            | {:through_stages, t, (fun() -> [{GenStage.stage(), keyword}])}
            | {:enumerables, Enumerable.t()}
-           | {:join, t, t, fun(), fun(), fun()}
+           | {:join, join, t, t, fun(), fun(), fun()}
            | {:departition, t, fun(), fun(), fun()}
            | {:flows, [t]}
 
