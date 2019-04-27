@@ -26,6 +26,7 @@ defmodule Flow.Mixfile do
 
   defp deps do
     [
+      {:dialyxir, "~> 1.0.0-rc.6", only: [:dev], runtime: false},
       {:gen_stage, "~> 0.14.0"},
       {:ex_doc, "~> 0.19", only: :docs}
     ]

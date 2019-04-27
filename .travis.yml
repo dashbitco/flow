@@ -11,9 +11,9 @@ matrix:
       otp_release: "20.3"
     - elixir: "1.6.6"
       otp_release: "21.0"
-    - elixir: "1.7.0-rc.1"
+    - elixir: "1.7.1"
       otp_release: "20.3"
-    - elixir: "1.7.0-rc.1"
+    - elixir: "1.7.1"
       otp_release: "21.0"
 sudo: false # to use faster container based build environment
 notifications:
@@ -21,5 +21,7 @@ notifications:
     - jose.valim@gmail.com
     - lackac@lackac.hu
 script:
+  - mix compile --warnings-as-errors
   - elixir --version | grep -q '^Elixir 1\.5' || mix format --check-formatted
   - mix test
+  - elixir --version | grep -q '^Elixir 1\.5' || mix dialyzer --halt-exit-status
