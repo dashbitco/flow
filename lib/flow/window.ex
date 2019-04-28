@@ -254,7 +254,11 @@ defmodule Flow.Window do
   between count windows and global windows with count triggers.
   """
 
-  @type t :: %{required(:trigger) => {fun(), fun()} | nil, required(:periodically) => [trigger]}
+  @type t :: %{
+          required(:trigger) => {fun(), fun()} | nil,
+          required(:periodically) => [trigger],
+          optional(atom()) => term()
+        }
 
   @typedoc "The supported window types."
   @type type :: :global | :fixed | :periodic | :count | any()
@@ -486,6 +490,7 @@ defmodule Flow.Window do
     %{window | periodically: [trigger | periodically]}
   end
 
+  @spec to_ms(pos_integer(), time_unit()) :: pos_integer
   defp to_ms(count, :millisecond), do: count
   defp to_ms(count, :second), do: count * 1000
   defp to_ms(count, :minute), do: count * 1000 * 60
