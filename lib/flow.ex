@@ -459,7 +459,7 @@ defmodule Flow do
           window: Flow.Window.t()
         }
 
-  @type join :: :inner | :left_outer | :right_outer | :outer
+  @type join :: :inner | :left_outer | :right_outer | :full_outer
 
   @typep producers ::
            nil
