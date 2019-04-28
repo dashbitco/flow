@@ -3,11 +3,17 @@ defmodule Flow.Coordinator do
   use GenServer
 
   def start_link(flow, type, consumers, options) do
-    GenServer.start_link(__MODULE__, {flow, type, consumers, options}, options)
+    filtered_options =
+      Keyword.take(options, [:debug, :name, :timeout, :spawn_opt, :hibernate_after])
+
+    GenServer.start_link(__MODULE__, {flow, type, consumers, options}, filtered_options)
   end
 
   def start(flow, type, consumers, options) do
-    GenServer.start(__MODULE__, {flow, type, consumers, options}, options)
+    filtered_options =
+      Keyword.take(options, [:debug, :name, :timeout, :spawn_opt, :hibernate_after])
+
+    GenServer.start(__MODULE__, {flow, type, consumers, options}, filtered_options)
   end
 
   def stream(pid) do
