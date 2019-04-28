@@ -257,11 +257,7 @@ defmodule Flow.Window do
   @type t :: %{
           required(:trigger) => {fun(), fun()} | nil,
           required(:periodically) => [trigger],
-          optional(:count) => non_neg_integer(),
-          optional(:lateness) => non_neg_integer(),
-          optional(:by) => by(),
-          optional(:duration) => non_neg_integer(),
-          optional(:__struct__) => module()
+          optional(atom()) => term()
         }
 
   @typedoc "The supported window types."
