@@ -595,8 +595,8 @@ defmodule Flow do
   Creates a flow with a list of already running stages as `producers`.
 
   `producers` are already running stages that have type `:producer`
-  or `:producer_consumer`. If instead you want the producers to be
-  started alongside the flow, see `from_specs/2` instead.
+   If instead you want the producers to be started alongside the flow,
+   see `from_specs/2` instead.
 
   ## Options
 
