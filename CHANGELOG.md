@@ -1,6 +1,14 @@
 # Changelog
 
-## v0.15.0-dev
+## v0.15.0 (2019-10-28)
+
+  * Enhancements
+    * Add on_init callback to MapReducer
+    * Deprecate Flow.each to avoid pitfalls
+    * Remove previously deprecated code
+
+  * Bug fixes
+    * Set demand to accumulate before producer_consumer subscribe
 
 ## v0.14.3 (2018-10-25)
 
