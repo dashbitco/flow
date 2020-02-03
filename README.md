@@ -23,7 +23,7 @@ Flow requires Elixir v1.3. Add `:flow` to your list of dependencies in mix.exs:
 
 ```elixir
 def deps do
-  [{:flow, "~> 0.14"}]
+  [{:flow, "~> 1.0"}]
 end
 ```
 
