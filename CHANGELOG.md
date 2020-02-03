@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.0.0 (2020-02-03)
+
+  * Enhancements
+    * Require GenStage v1.0.0
+
 ## v0.15.0 (2019-10-28)
 
   * Enhancements
