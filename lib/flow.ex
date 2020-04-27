@@ -1232,7 +1232,7 @@ defmodule Flow do
 
   ## Examples
 
-      flow |> Flow.partition(window: Flow.Global.window)
+      flow |> Flow.partition(window: Flow.Window.global)
       flow |> Flow.partition(stages: 4)
 
   ## Options
@@ -1385,7 +1385,7 @@ defmodule Flow do
 
   ## Examples
 
-      Flow.shuffle(flow1, window: Flow.Global.window)
+      Flow.shuffle(flow1, window: Flow.Window.global)
       Flow.shuffle([flow1, flow2], stages: 4)
 
   ## Options
