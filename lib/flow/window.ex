@@ -450,7 +450,7 @@ defmodule Flow.Window do
     trigger(window, fn -> count end, fn events, acc ->
       length = length(events)
 
-      if length(events) >= acc do
+      if length >= acc do
         {pre, pos} = Enum.split(events, acc)
         {:trigger, name, pre, pos, count}
       else
