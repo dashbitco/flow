@@ -1003,7 +1003,7 @@ defmodule FlowTest do
       assert Flow.from_specs(@specs, stages: 1)
              |> Flow.map_batch(&[Enum.sum(&1)])
              |> Enum.take(5)
-             |> Enum.sort() == [124750, 374750, 624750, 874750, 1124750]
+             |> Enum.sort() == [124_750, 374_750, 624_750, 874_750, 1_124_750]
     end
 
     test "reject/2" do
