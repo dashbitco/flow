@@ -14,7 +14,7 @@ defmodule Flow.Materialize do
   def materialize(%Flow{} = flow, demand, start_link, type, type_options) do
     %{operations: operations, options: options, producers: producers, window: window} = flow
     options = Keyword.merge(type_options, options)
-    ops = split_operations(operations)
+    {ops, batchers} = split_operations(operations)
 
     {producers, consumers, ops, window} =
       start_producers(producers, ops, start_link, window, options)
@@ -23,7 +23,7 @@ defmodule Flow.Materialize do
       for {producer, _} <- producers, do: GenStage.demand(producer, demand)
     end
 
-    {producers, start_stages(ops, window, consumers, start_link, type, options)}
+    {producers, start_stages(ops, window, consumers, start_link, type, batchers, options)}
   end
 
   ## Helpers
@@ -32,19 +32,31 @@ defmodule Flow.Materialize do
   Splits the flow operations into layers of stages.
   """
   def split_operations([]) do
-    :none
+    {:none, []}
   end
 
   def split_operations(operations) do
+    {batchers, operations} = Enum.split_while(operations, &match?({:batch, _}, &1))
+
     if Enum.all?(operations, &match?({:mapper, _, _}, &1)) do
-      {:mapper, mapper_ops(operations), :lists.reverse(operations)}
+      {{:mapper, mapper_ops(operations), :lists.reverse(operations)}, :lists.reverse(batchers)}
     else
       ops = :lists.reverse(operations)
-      {:reducer, reducer_ops(ops), ops}
+      {{:reducer, reducer_ops(ops), ops}, :lists.reverse(batchers)}
     end
   end
 
-  defp start_stages(:none, window, producers, _start_link, _type, _options) do
+  defp batcher_ops([], reducer), do: reducer
+
+  defp batcher_ops(batchers, reducer) do
+    funs = Enum.map(batchers, fn {:batch, fun} -> fun end)
+
+    fn ref, events, acc, index ->
+      reducer.(ref, :lists.foldl(& &1.(&2), events, funs), acc, index)
+    end
+  end
+
+  defp start_stages(:none, window, producers, _start_link, _type, _batchers, _options) do
     if window != Flow.Window.global() do
       raise ArgumentError, "a window was set but no computation is happening on this partition"
     end
@@ -54,8 +66,17 @@ defmodule Flow.Materialize do
     end
   end
 
-  defp start_stages({_mr, compiled_ops, _ops}, window, producers, start_link, type, opts) do
+  defp start_stages(
+         {_mr, compiled_ops, _ops},
+         window,
+         producers,
+         start_link,
+         type,
+         batchers,
+         opts
+       ) do
     {acc, reducer, trigger} = window_ops(window, compiled_ops, opts)
+    reducer = batcher_ops(batchers, reducer)
 
     {stages, opts} = Keyword.pop(opts, :stages)
     {supervisor_opts, opts} = Keyword.split(opts, @supervisor_opts)

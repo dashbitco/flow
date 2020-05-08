@@ -1211,6 +1211,29 @@ defmodule Flow do
     add_mapper(flow, :reject, [filter])
   end
 
+  @doc """
+  Applies the given function to each "batch" of GenStage events.
+
+  Flow uses GenStage which sends events in batches, controlled by
+  `min_demand` and `max_demand`. This callback allows you to hook
+  into this batch, before any `map` or `reduce` operation is invoked.
+  This often useful to preload data that is used in later stages.
+  """
+  def map_batch(flow, function) when is_function(function, 1) do
+    case flow.operations do
+      [] ->
+        add_operation(flow, {:batch, function})
+
+      [{:batch, _} | _] ->
+        add_operation(flow, {:batch, function})
+
+      [_ | _] ->
+        raise ArgumentError,
+              "map_batch/2 can only be called at the beginning of the stage/partition, " <>
+                "before any map or reduce operation"
+    end
+  end
+
   ## Reducers
 
   @doc """

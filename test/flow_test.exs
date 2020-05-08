@@ -109,6 +109,24 @@ defmodule FlowTest do
       end
     end
 
+    test "on map_batch/2" do
+      message = ~r"map_batch/2 can only be called at the beginning of the stage/partition"
+
+      assert_raise ArgumentError, message, fn ->
+        Flow.from_enumerable([1, 2, 3])
+        |> Flow.reduce(fn -> 0 end, &+/2)
+        |> Flow.map_batch(& &1)
+      end
+
+      message = ~r"map_batch/2 can only be called at the beginning of the stage/partition"
+
+      assert_raise ArgumentError, message, fn ->
+        Flow.from_enumerable([1, 2, 3])
+        |> Flow.map(& &1)
+        |> Flow.map_batch(& &1)
+      end
+    end
+
     test "on mapper after emit/1" do
       message =
         ~r"map/2 cannot be called after emit/1 and on_trigger/2 since events have already been emitted"
@@ -194,6 +212,10 @@ defmodule FlowTest do
     test "flat_map/2" do
       assert @flow |> Flow.flat_map(&[&1, &1]) |> Enum.sort() ==
                [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]
+    end
+
+    test "map_batch/2" do
+      assert @flow |> Flow.map_batch(fn [x, y, z] -> [x + y + z] end) |> Enum.sort() == [6, 15]
     end
 
     test "map/2" do
@@ -398,6 +420,10 @@ defmodule FlowTest do
     test "flat_map/2" do
       assert @flow |> Flow.flat_map(&[&1, &1]) |> Enum.sort() ==
                [1, 1, 2, 2, 3, 3, 4, 4, 5, 5, 6, 6]
+    end
+
+    test "map_batch/2" do
+      assert @flow |> Flow.map_batch(fn [x, y, z] -> [x + y + z] end) |> Enum.sort() == [6, 15]
     end
 
     test "map/2" do
@@ -624,6 +650,11 @@ defmodule FlowTest do
 
     test "map/2" do
       assert @flow |> Flow.map(&(&1 * 2)) |> Enum.sort() == [2, 4, 6, 8, 10, 12, 14, 16, 18, 20]
+    end
+
+    test "map_batch/2" do
+      assert @flow |> Flow.map_batch(fn list -> [Enum.sum(list)] end) |> Enum.sort() ==
+               [1, 2, 3, 4, 5, 6, 8, 10, 16]
     end
 
     test "reject/2" do
@@ -966,6 +997,13 @@ defmodule FlowTest do
              |> Flow.map(&(&1 * 2))
              |> Enum.take(5)
              |> Enum.sort() == [0, 2, 4, 6, 8]
+    end
+
+    test "map_batch/2" do
+      assert Flow.from_specs(@specs, stages: 1)
+             |> Flow.map_batch(&[Enum.sum(&1)])
+             |> Enum.take(5)
+             |> Enum.sort() == [124750, 374750, 624750, 874750, 1124750]
     end
 
     test "reject/2" do
