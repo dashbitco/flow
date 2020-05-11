@@ -36,7 +36,7 @@ defmodule Flow.Materialize do
   end
 
   def split_operations(operations) do
-    {batchers, operations} = Enum.split_while(operations, &match?({:batch, _}, &1))
+    {operations, batchers} = Enum.split_while(operations, &(not match?({:batch, _}, &1)))
 
     if Enum.all?(operations, &match?({:mapper, _, _}, &1)) do
       {{:mapper, mapper_ops(operations), :lists.reverse(operations)}, :lists.reverse(batchers)}
