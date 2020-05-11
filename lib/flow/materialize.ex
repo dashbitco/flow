@@ -36,13 +36,15 @@ defmodule Flow.Materialize do
   end
 
   def split_operations(operations) do
-    {operations, batchers} = Enum.split_while(operations, &(not match?({:batch, _}, &1)))
+    {batchers, operations} =
+      operations
+      |> :lists.reverse()
+      |> Enum.split_while(&match?({:batch, _}, &1))
 
     if Enum.all?(operations, &match?({:mapper, _, _}, &1)) do
-      {{:mapper, mapper_ops(operations), :lists.reverse(operations)}, :lists.reverse(batchers)}
+      {{:mapper, mapper_ops(operations), operations}, batchers}
     else
-      ops = :lists.reverse(operations)
-      {{:reducer, reducer_ops(ops), ops}, :lists.reverse(batchers)}
+      {{:reducer, reducer_ops(operations), operations}, batchers}
     end
   end
 
@@ -722,7 +724,7 @@ defmodule Flow.Materialize do
   end
 
   defp reducer_from_mappers(mappers, reducer \\ &[&1 | &2]) do
-    :lists.foldl(&mapper/2, reducer, mappers)
+    :lists.foldr(&mapper/2, reducer, mappers)
   end
 
   defp mapper({:mapper, :each, [each]}, fun) do
@@ -763,5 +765,5 @@ defmodule Flow.Materialize do
   end
 
   defp take_mappers([{:mapper, _, _} = mapper | ops], acc), do: take_mappers(ops, [mapper | acc])
-  defp take_mappers(ops, acc), do: {acc, ops}
+  defp take_mappers(ops, acc), do: {:lists.reverse(acc), ops}
 end

@@ -216,6 +216,11 @@ defmodule FlowTest do
 
     test "map_batch/2" do
       assert @flow |> Flow.map_batch(fn [x, y, z] -> [x + y + z] end) |> Enum.sort() == [6, 15]
+
+      assert @flow
+             |> Flow.map_batch(fn [x, y, z] -> [x + y + z] end)
+             |> Flow.map(&(&1 * 2))
+             |> Enum.sort() == [12, 30]
     end
 
     test "map/2" do
