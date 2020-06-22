@@ -116,7 +116,7 @@ defmodule Flow.Window.CountTest do
         max_demand: 10
       ]
 
-      assert Stream.concat(1..10, Stream.timer(:infinity))
+      assert Stream.concat(1..10, Stream.timer(60_000))
              |> Flow.from_enumerable(max_demand: 5, stages: 2)
              |> Flow.partition(partition_opts)
              |> Flow.reduce(fn -> 0 end, &(&1 + &2))
@@ -130,7 +130,7 @@ defmodule Flow.Window.CountTest do
         0
       end
 
-      assert Stream.concat(1..10, Stream.timer(:infinity))
+      assert Stream.concat(1..10, Stream.timer(60_000))
              |> Flow.from_enumerable(max_demand: 5, stages: 2)
              |> Flow.partition(stages: 1, max_demand: 10, window: single_window())
              |> Flow.reduce(reduce_fun, &(&1 + &2))

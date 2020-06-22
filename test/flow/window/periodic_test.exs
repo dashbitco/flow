@@ -7,7 +7,7 @@ defmodule Flow.Window.PeriodicTest do
 
   test "emits based on intervals" do
     result =
-      Stream.concat(1..10, Stream.timer(:infinity))
+      Stream.concat(1..10, Stream.timer(60_000))
       |> Flow.from_enumerable(max_demand: 5)
       |> Flow.partition(window: single_window(), stages: 1, max_demand: 10)
       |> Flow.reduce(fn -> 0 end, &(&1 + &2))
@@ -27,7 +27,7 @@ defmodule Flow.Window.PeriodicTest do
     ]
 
     result =
-      Stream.concat(1..10, Stream.timer(:infinity))
+      Stream.concat(1..10, Stream.timer(60_000))
       |> Flow.from_enumerable(max_demand: 5, stages: 2)
       |> Flow.partition(partition_opts)
       |> Flow.reduce(fn -> 0 end, &(&1 + &2))

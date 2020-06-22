@@ -102,7 +102,7 @@ defmodule Flow.Window.GlobalTest do
       max_demand: 10
     ]
 
-    assert Flow.from_enumerable(Stream.concat(1..10, Stream.timer(:infinity)), max_demand: 5)
+    assert Flow.from_enumerable(Stream.concat(1..10, Stream.timer(60_000)), max_demand: 5)
            |> Flow.partition(partition_opts)
            |> Flow.reduce(fn -> 0 end, &(&1 + &2))
            |> Flow.on_trigger(&{[&1 * 2], &1})
@@ -115,7 +115,7 @@ defmodule Flow.Window.GlobalTest do
       0
     end
 
-    assert Stream.concat(1..10, Stream.timer(:infinity))
+    assert Stream.concat(1..10, Stream.timer(60_000))
            |> Flow.from_enumerable(max_demand: 5, stages: 2)
            |> Flow.partition(stages: 1, max_demand: 10)
            |> Flow.reduce(reduce_fun, &(&1 + &2))
