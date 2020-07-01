@@ -1,4 +1,4 @@
-# Flow [![Build Status](https://travis-ci.org/dashbitco/flow.svg?branch=master)](https://travis-ci.org/dashbitco/flow)
+# Flow [![Build Status](https://github.com/dashbitco/flow/workflows/CI/badge.svg)](https://github.com/dashbitco/flow/actions?query=workflow%3A%22CI%22)
 
 `Flow` allows developers to express computations on collections, similar to the `Enum` and `Stream` modules, although computations will be executed in parallel using multiple [`GenStage`](https://github.com/elixir-lang/gen_stage)s.
 
