@@ -65,7 +65,7 @@ You can now replace this code by:
 
     |> Flow.on_trigger(fn acc -> {do_something(acc), []} end)
 
-Where the first element of the tuple reeturned by `on_trigger` is the data to emit and the second element is the new accumulator of the reducer stage. Similarly, if you were using `map_state/2` (or `each_state/2`) and a `:keep` trigger, like this:
+Where the first element of the tuple returned by `on_trigger` is the data to emit and the second element is the new accumulator of the reducer stage. Similarly, if you were using `map_state/2` (or `each_state/2`) and a `:keep` trigger, like this:
 
     |> Flow.map_state(fn acc -> do_something(acc) end)
 
