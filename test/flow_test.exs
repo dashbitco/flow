@@ -142,6 +142,8 @@ defmodule FlowTest do
 
     @tag :capture_log
     test "on window without computation" do
+      Process.flag(:trap_exit, true)
+
       assert catch_exit(
                [1, 2, 3]
                |> Flow.from_enumerable(window: Flow.Window.fixed(1, :second, & &1))
