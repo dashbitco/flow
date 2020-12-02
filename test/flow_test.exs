@@ -193,6 +193,25 @@ defmodule FlowTest do
       refute_received _
       assert Process.info(self(), :monitors) == {:monitors, []}
     end
+
+    test "terminates flow if parent process terminates" do
+      parent = self()
+
+      {:ok, task_pid} =
+        Task.start(fn ->
+          Flow.from_enumerable(Stream.concat([0], Stream.cycle(1..100)), stages: 4)
+          |> Flow.map(fn
+            0 -> send(parent, {:running, self()})
+            n -> n
+          end)
+          |> Enum.to_list()
+        end)
+
+      assert_receive {:running, stage_pid}
+      stage_ref = Process.monitor(stage_pid)
+      Process.exit(task_pid, :kill)
+      assert_receive {:DOWN, ^stage_ref, _, _, _}
+    end
   end
 
   describe "enumerable-stream" do
