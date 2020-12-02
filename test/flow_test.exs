@@ -151,6 +151,8 @@ defmodule FlowTest do
 
     @tag :capture_log
     test "on error in producer started via run" do
+      Process.flag(:trap_exit, true)
+
       assert catch_exit(
                :start
                |> Stream.iterate(fn _ -> raise "oops" end)
@@ -202,6 +204,7 @@ defmodule FlowTest do
 
     @tag :capture_log
     test "raises locally" do
+      Process.flag(:trap_exit, true)
       assert catch_exit(@flow |> Flow.map(fn _ -> raise "oops" end) |> Enum.to_list())
     end
 
@@ -415,6 +418,7 @@ defmodule FlowTest do
 
     @tag :capture_log
     test "raises locally" do
+      Process.flag(:trap_exit, true)
       assert catch_exit(@flow |> Flow.map(fn _ -> raise "oops" end) |> Enum.to_list())
     end
 
@@ -641,6 +645,7 @@ defmodule FlowTest do
 
     @tag :capture_log
     test "raises locally" do
+      Process.flag(:trap_exit, true)
       assert catch_exit(@flow |> Flow.map(fn _ -> raise "oops" end) |> Enum.to_list())
     end
 

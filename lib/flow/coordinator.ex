@@ -9,13 +9,6 @@ defmodule Flow.Coordinator do
     GenServer.start_link(__MODULE__, {flow, type, consumers, options}, filtered_options)
   end
 
-  def start(flow, type, consumers, options) do
-    filtered_options =
-      Keyword.take(options, [:debug, :name, :timeout, :spawn_opt, :hibernate_after])
-
-    GenServer.start(__MODULE__, {flow, type, consumers, options}, filtered_options)
-  end
-
   def stream(pid) do
     GenServer.call(pid, :stream, :infinity)
   end

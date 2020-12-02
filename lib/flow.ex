@@ -1987,7 +1987,7 @@ defmodule Flow do
     def reduce(flow, acc, fun) do
       opts = [demand: :accumulate]
 
-      case Flow.Coordinator.start(flow, :producer_consumer, {:outer, fn _ -> [] end}, opts) do
+      case Flow.Coordinator.start_link(flow, :producer_consumer, {:outer, fn _ -> [] end}, opts) do
         {:ok, pid} ->
           Flow.Coordinator.stream(pid).(acc, fun)
 
