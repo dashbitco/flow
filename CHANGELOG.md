@@ -1,5 +1,13 @@
 # Changelog
 
+## v1.1.0 (2020-12-09)
+
+  * Enhancements
+    * Add `Flow.map_batch/2`
+
+  * Bug fixes
+    * Do not leak flows while enumerating
+
 ## v1.0.0 (2020-02-03)
 
   * Enhancements
