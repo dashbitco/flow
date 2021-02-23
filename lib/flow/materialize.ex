@@ -673,7 +673,7 @@ defmodule Flow.Materialize do
                   dc -> dc <> " (#{msg})"
                 end)
 
-              reraise e, System.stacktrace()
+              reraise e, __STACKTRACE__
           else
             events -> {events, acc}
           end
