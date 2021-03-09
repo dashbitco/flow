@@ -17,14 +17,14 @@ defmodule Flow.Coordinator do
 
   def init({flow, type, {inner_or_outer, consumers}, options}) do
     Process.flag(:trap_exit, true)
-    type_options = Keyword.take(options, [:dispatcher])
+    dispatcher = Keyword.get(options, :dispatcher, GenStage.DemandDispatcher)
 
     {:ok, supervisor} = start_supervisor()
     start_link = &start_child(supervisor, &1, restart: :temporary)
     demand = Keyword.get(options, :demand, :forward)
 
     {producers, intermediary} =
-      Flow.Materialize.materialize(flow, demand, start_link, type, type_options)
+      Flow.Materialize.materialize(flow, demand, start_link, type, dispatcher)
 
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
     producers = Enum.map(producers, &elem(&1, 0))

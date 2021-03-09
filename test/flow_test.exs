@@ -1300,7 +1300,7 @@ defmodule FlowTest do
     end
 
     test "merges different flows together" do
-      assert merge_and_shuffle(stages: 4, min_demand: 5)
+      assert merge_and_shuffle(stages: 1)
              |> Flow.reduce(fn -> 0 end, &(&1 + &2))
              |> Flow.on_trigger(&{[&1], &1})
              |> Enum.sum() == 10100
@@ -1313,10 +1313,10 @@ defmodule FlowTest do
           x when x <= 200 -> 1_000
         end)
 
-      assert merge_and_shuffle(window: window, stages: 4, min_demand: 5)
+      assert merge_and_shuffle(window: window, stages: 1)
              |> Flow.reduce(fn -> [] end, &[&1 | &2])
              |> Flow.on_trigger(&{[Enum.sum(&1)], &1})
-             |> Enum.sort() == [594, 596, 654, 706, 1248, 1964, 2066, 2272]
+             |> Enum.sort() == [2550, 7550]
     end
   end
 

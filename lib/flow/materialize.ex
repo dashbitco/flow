@@ -11,17 +11,22 @@ defmodule Flow.Materialize do
             "please call \"from_enumerable\", \"from_stages\" or \"from_specs\" accordingly"
   end
 
-  def materialize(%Flow{} = flow, demand, start_link, type, type_options) do
+  def materialize(%Flow{} = flow, demand, start_link, type, dispatcher) do
     %{operations: operations, options: options, producers: producers, window: window} = flow
-    options = Keyword.merge(options, type_options)
     {ops, batchers} = split_operations(operations)
 
     {producers, consumers, ops, window} =
-      start_producers(producers, ops, start_link, window, options)
+      start_producers(producers, ops, start_link, window, options, dispatcher)
 
     if demand == :accumulate do
       for {producer, _} <- producers, do: GenStage.demand(producer, demand)
     end
+
+    options =
+      case type do
+        :consumer -> options
+        _ -> Keyword.put(options, :dispatcher, dispatcher)
+      end
 
     {producers, start_stages(ops, window, consumers, start_link, type, batchers, options)}
   end
@@ -84,12 +89,6 @@ defmodule Flow.Materialize do
     {supervisor_opts, opts} = Keyword.split(opts, @supervisor_opts)
     {init_opts, subscribe_opts} = Keyword.split(opts, @map_reducer_opts)
 
-    init_opts =
-      case type do
-        :consumer -> Keyword.drop(init_opts, [:dispatcher])
-        _ -> init_opts
-      end
-
     for i <- 0..(stages - 1) do
       subscriptions =
         for {producer, producer_opts} <- producers do
@@ -121,7 +120,8 @@ defmodule Flow.Materialize do
          ops,
          start_link,
          window,
-         options
+         options,
+         _dispatcher
        ) do
     partitions = Keyword.fetch!(options, :stages)
     {left_producers, left_consumers} = start_join(:left, left, left_key, partitions, start_link)
@@ -148,9 +148,12 @@ defmodule Flow.Materialize do
          ops,
          start_link,
          window,
-         _options
+         _options,
+         _dispatcher
        ) do
-    {producers, consumers} = materialize(flow, :forward, start_link, :producer_consumer, [])
+    {producers, consumers} =
+      materialize(flow, :forward, start_link, :producer_consumer, GenStage.DemandDispatcher)
+
     {type, {acc, fun, trigger}, ops} = ensure_ops(ops)
 
     stages = Keyword.fetch!(flow.options, :stages)
@@ -161,30 +164,34 @@ defmodule Flow.Materialize do
      window}
   end
 
-  defp start_producers({:flows, flows}, ops, start_link, window, options) do
-    options = partition(options)
+  defp start_producers({:flows, flows}, ops, start_link, window, options, dispatcher) do
+    up_dispatcher =
+      Keyword.get_lazy(options, :dispatcher, fn ->
+        case Keyword.fetch!(options, :stages) do
+          1 ->
+            GenStage.DemandDispatcher
+
+          stages ->
+            hash = options[:hash] || hash_by_key(options[:key], stages)
+            dispatcher_opts = [partitions: 0..(stages - 1), hash: hash(hash)]
+            {GenStage.PartitionDispatcher, dispatcher_opts}
+        end
+      end)
 
     {producers, consumers} =
       Enum.reduce(flows, {[], []}, fn flow, {producers_acc, consumers_acc} ->
         {producers, consumers} =
-          materialize(flow, :forward, start_link, :producer_consumer, options)
+          materialize(flow, :forward, start_link, :producer_consumer, up_dispatcher)
 
         {producers ++ producers_acc, consumers ++ consumers_acc}
       end)
 
-    {producers, consumers, ensure_ops(ops), window}
+    {producers, consumers, ensure_ops(ops, up_dispatcher, dispatcher), window}
   end
 
-  defp start_producers({:from_stages, producers}, ops, start_link, window, options) do
+  defp start_producers({:from_stages, producers}, ops, start_link, window, _options, dispatcher) do
     producers = producers.(start_link)
-
-    # If there are no ops and there is a need for a custom
-    # dispatcher, we need to wrap the sources in a custom op.
-    if Keyword.has_key?(options, :dispatcher) do
-      {producers, producers, ensure_ops(ops), window}
-    else
-      {producers, producers, ops, window}
-    end
+    {producers, producers, ensure_ops(ops, GenStage.DemandDispatcher, dispatcher), window}
   end
 
   defp start_producers(
@@ -192,13 +199,15 @@ defmodule Flow.Materialize do
          ops,
          start_link,
          window,
-         options
+         options,
+         dispatcher
        ) do
+    up_dispatcher = options[:dispatcher] || GenStage.DemandDispatcher
+
     {producers, intermediary} =
-      materialize(flow, :forward, start_link, :producer_consumer, [])
+      materialize(flow, :forward, start_link, :producer_consumer, up_dispatcher)
 
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
-
     producers_consumers = producers_consumers.(start_link)
 
     for {pid, _} <- intermediary, {producer_consumer, subscribe_opts} <- producers_consumers do
@@ -210,14 +219,14 @@ defmodule Flow.Materialize do
       for {producer_consumer, _} <- producers_consumers, do: {producer_consumer, []}
 
     # We need to ensure ops so we get proper map reducer consumers.
-    {producers, producers_consumers, ensure_ops(ops), window}
+    {producers, producers_consumers, ensure_ops(ops, up_dispatcher, dispatcher), window}
   end
 
-  defp start_producers({:enumerables, enumerables}, ops, start_link, window, options) do
+  defp start_producers({:enumerables, enumerables}, ops, start_link, window, options, dispatcher) do
     # If there are no ops, just start the enumerables with the options.
     # Otherwise it is a regular producer consumer with demand dispatcher.
     # In this case, options is used by subsequent mapper/reducer stages.
-    streamer_opts = if ops == :none, do: options, else: []
+    streamer_opts = if ops == :none, do: Keyword.put(options, :dispatcher, dispatcher), else: []
 
     producers = start_enumerables(enumerables, streamer_opts, start_link)
     {producers, producers, ops, window}
@@ -242,18 +251,6 @@ defmodule Flow.Materialize do
       shutdown: shutdown,
       modules: [GenStage.Streamer]
     }
-  end
-
-  defp partition(options) do
-    case Keyword.fetch!(options, :stages) do
-      1 ->
-        [dispatcher: GenStage.DemandDispatcher]
-
-      stages ->
-        hash = options[:hash] || hash_by_key(options[:key], stages)
-        dispatcher_opts = [partitions: 0..(stages - 1), hash: hash(hash)]
-        [dispatcher: {GenStage.PartitionDispatcher, dispatcher_opts}]
-    end
   end
 
   defp hash(fun) when is_function(fun, 1) do
@@ -294,6 +291,11 @@ defmodule Flow.Materialize do
     instead got: #{inspect(other)}
     """
   end
+
+  # If the upstream dispatcher and the current dispatcher are the same,
+  # we don't need to ensure ops and we can skip a layer of stages
+  defp ensure_ops(ops, dispatcher, dispatcher), do: ops
+  defp ensure_ops(ops, _up_dispatcher, _dispatcher), do: ensure_ops(ops)
 
   defp ensure_ops(:none), do: {:mapper, mapper_ops([]), []}
   defp ensure_ops(ops), do: ops
@@ -378,8 +380,10 @@ defmodule Flow.Materialize do
       {{key, event}, :erlang.phash2(key, stages)}
     end
 
-    opts = [dispatcher: {GenStage.PartitionDispatcher, partitions: 0..(stages - 1), hash: hash}]
-    {producers, consumers} = materialize(flow, :forward, start_link, :producer_consumer, opts)
+    dispatcher = {GenStage.PartitionDispatcher, partitions: 0..(stages - 1), hash: hash}
+
+    {producers, consumers} =
+      materialize(flow, :forward, start_link, :producer_consumer, dispatcher)
 
     consumers =
       for {consumer, consumer_opts} <- consumers do

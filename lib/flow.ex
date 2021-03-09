@@ -1274,8 +1274,6 @@ defmodule Flow do
     * `:hash` - the hashing function. By default a hashing function is built
       on the key but a custom one may be specified as described in
       `GenStage.PartitionDispatcher`
-    * `:dispatcher` - by default, `partition/2` uses `GenStage.PartitionDispatcher`
-      with the given hash function but any other dispatcher can be given
     * `:min_demand` - the minimum demand for this subscription
     * `:max_demand` - the maximum demand for this subscription
 
@@ -1386,7 +1384,6 @@ defmodule Flow do
   defp build_departition(flow, acc_fun, merge_fun, done_fun, options) do
     {window, options} =
       options
-      |> Keyword.put(:dispatcher, GenStage.DemandDispatcher)
       |> Keyword.put(:stages, 1)
       |> Keyword.pop(:window, Flow.Window.global())
 
@@ -1469,6 +1466,8 @@ defmodule Flow do
     end
   end
 
+  # We let the partition dispatcher be lazily calculated
+  # in materialize as it knows all of the partitions.
   defp put_dispatcher(options, GenStage.PartitionDispatcher), do: options
   defp put_dispatcher(options, dispatcher), do: Keyword.put(options, :dispatcher, dispatcher)
 
