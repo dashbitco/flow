@@ -1099,6 +1099,20 @@ defmodule FlowTest do
              |> Enum.sort() == [[1, 2, 4, 5], [3, 6]]
     end
 
+    test "allows function based partitioning after shuffling" do
+      enumerables = [
+        [%{key: 1, value: 1}, %{key: 2, value: 2}, %{key: 3, value: 3}],
+        [%{key: 1, value: 4}, %{key: 2, value: 5}, %{key: 3, value: 6}]
+      ]
+
+      assert Flow.from_enumerables(enumerables)
+             |> Flow.shuffle(stages: 2)
+             |> Flow.partition(key: & &1.key, stages: 2)
+             |> Flow.reduce(fn -> [] end, &[&1 | &2])
+             |> Flow.on_trigger(fn acc -> {[acc |> Enum.map(& &1.value) |> Enum.sort()], acc} end)
+             |> Enum.sort() == [[1, 2, 4, 5], [3, 6]]
+    end
+
     test "allows custom windowing" do
       window =
         Flow.Window.fixed(1, :second, fn

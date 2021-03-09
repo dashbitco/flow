@@ -13,7 +13,7 @@ defmodule Flow.Materialize do
 
   def materialize(%Flow{} = flow, demand, start_link, type, type_options) do
     %{operations: operations, options: options, producers: producers, window: window} = flow
-    options = Keyword.merge(type_options, options)
+    options = Keyword.merge(options, type_options)
     {ops, batchers} = split_operations(operations)
 
     {producers, consumers, ops, window} =
@@ -148,9 +148,9 @@ defmodule Flow.Materialize do
          ops,
          start_link,
          window,
-         options
+         _options
        ) do
-    {producers, consumers} = materialize(flow, :forward, start_link, :producer_consumer, options)
+    {producers, consumers} = materialize(flow, :forward, start_link, :producer_consumer, [])
     {type, {acc, fun, trigger}, ops} = ensure_ops(ops)
 
     stages = Keyword.fetch!(flow.options, :stages)
@@ -195,7 +195,7 @@ defmodule Flow.Materialize do
          options
        ) do
     {producers, intermediary} =
-      materialize(flow, :forward, start_link, :producer_consumer, options)
+      materialize(flow, :forward, start_link, :producer_consumer, [])
 
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
 

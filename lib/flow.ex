@@ -1291,7 +1291,7 @@ defmodule Flow do
   """
   @spec partition(t | [t], keyword()) :: t
   def partition(flow_or_flows, options \\ []) when is_list(options) do
-    merge(List.wrap(flow_or_flows), GenStage.PartitionDispatcher, options)
+    merge(flow_or_flows, GenStage.PartitionDispatcher, options)
   end
 
   @doc """
