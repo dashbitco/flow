@@ -74,7 +74,7 @@ defmodule Flow do
   To convert from Stream to Flow, we have made two changes:
 
     1. We have replaced the calls to `Stream` with `Flow`
-    2. We call `partition/1` so words are properly partitioned between stages
+    2. We call `partition/2` so words are properly partitioned between stages
 
   The example above will use all available cores and will
   keep an ongoing flow of data instead of traversing them
@@ -153,7 +153,7 @@ defmodule Flow do
   Partitioning solves this by introducing a new set of stages and
   making sure the same word is always mapped to the same stage
   with the help of a hash function. Let's introduce the call to
-  `partition/1` back:
+  `partition/2` back:
 
       File.stream!("path/to/some/file")
       |> Flow.from_enumerable()
