@@ -128,7 +128,7 @@ This release also deprecates `Flow.Window.session/3` as developers can trivially
   * Bug fixes
     * Add `:gen_stage` to the applications list
     * Ensure we handle supervisor exits on flow coordinator
-    * Ensure we do not unecessary partition when fusing producer+streams
+    * Ensure we do not unnecessary partition when fusing producer+streams
 
 ## v0.11.0
 

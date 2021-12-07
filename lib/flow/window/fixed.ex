@@ -29,7 +29,7 @@ defmodule Flow.Window.Fixed do
     #    of this function is the most recent window for a given producer.
     #
     # 2. Next we store the most recent timestamp for the producer and get
-    #    both mininum and maximum seen windows.
+    #    both minimum and maximum seen windows.
     #
     # 3. Finally we see which windows have been seen by all producers (min)
     #    and if we are still missing any producer data (max is nil). We catch
