@@ -81,18 +81,18 @@ defmodule Flow.Window do
 
     * Punctuation - hand-written triggers based on the data
 
-  Flow supports the triggers above via the `trigger_every/3`,
-  `trigger_periodically/4` and `trigger/3` respectively.
+  Flow supports the triggers above via the `trigger_every/2`,
+  `trigger_periodically/3` and `trigger/3` respectively.
 
-  Once a trigger is emitted, the `reduce/3` step halts and invokes
-  the `on_trigger/2` callback, allowing you to emit events and change
+  Once a trigger is emitted, the `Flow.reduce/3` step halts and invokes
+  the `Flow.on_trigger/2` callback, allowing you to emit events and change
   the reducer accumulator.
 
   ### Event time and processing time
 
   Before we move to other window types, it is important to discuss
   the distinction between event time and processing time. In particular,
-  triggers created with the `trigger_periodically/4` function are
+  triggers created with the `trigger_periodically/3` function are
   intrinsically inaccurate and therefore should not be used to split the
   data. For example, if you are measuring the frequency that events arrive,
   using the event time will always yield the same result, while processing
@@ -144,7 +144,7 @@ defmodule Flow.Window do
 
   Since the data has been broken in two windows, the first four events belong
   to the same window while the last 3 belongs to the second one. Notice that
-  `reduce/3` is executed per window and that each event belongs to a single
+  `Flow.reduce/3` is executed per window and that each event belongs to a single
   window exclusively.
 
   Similar to global windows, fixed windows can also have triggers, allowing
@@ -180,7 +180,7 @@ defmodule Flow.Window do
   Luckily, event time windows include the concept of lateness, which is a
   processing time base period we would wait to receive late events.
   Let's change the example above once more but now change the window
-  to also call `allowed_lateness/4`:
+  to also call `allowed_lateness/3`:
 
       iex> data = [{"elixir", 1_000}, {"erlang", 60_000},
       ...>         {"concurrency", 3_200_000}, {"elixir", 4_000_000},
@@ -344,10 +344,10 @@ defmodule Flow.Window do
   where `window` is an integer that represents the beginning timestamp
   for the current window.
 
-  If `allowed_lateness/4` is used with fixed windows, the window will
+  If `allowed_lateness/3` is used with fixed windows, the window will
   first emit a `{:fixed, window, :watermark}` trigger when the window
   terminates and emit `{:fixed, window, :done}` only after the
-  `allowed_lateness/4` duration has passed.
+  `allowed_lateness/3` duration has passed.
 
   See the section on "Fixed windows" in the module documentation for examples.
   """
@@ -404,7 +404,7 @@ defmodule Flow.Window do
       events to be processed after the trigger with the `acc` as the new trigger
       accumulator.
 
-  We recommend looking at the implementation of `trigger_every/3` as
+  We recommend looking at the implementation of `trigger_every/2` as
   an example of a custom trigger.
   """
   @spec trigger(t, (() -> acc), trigger_fun) :: t
@@ -478,7 +478,7 @@ defmodule Flow.Window do
   It is also possible to dispatch a trigger by sending a message to
   `self()` with the format of `{:trigger, name}`. This is useful for
   custom triggers and timers. One example is to send the message when
-  building the accumulator for `reduce/3`.
+  building the accumulator for `Flow.reduce/3`.
 
   Similar to periodic triggers, message-based triggers will also be
   invoked to all windows that have changed since the last trigger.
@@ -507,7 +507,7 @@ defmodule Flow.Window do
 
   defp add_trigger(%{}, _trigger) do
     raise ArgumentError,
-          "Flow.Window.trigger/3 or Flow.Window.trigger_every/3 " <>
+          "Flow.Window.trigger/3 or Flow.Window.trigger_every/2 " <>
             "can only be called once per window"
   end
 end
