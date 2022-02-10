@@ -1171,9 +1171,9 @@ defmodule Flow do
 
   ## Examples
 
-      iex> flow = Flow.from_enumerable([foo: 1, foo: 2, bar: 3, foo: 4, bar: 5], stages: 1)
-      iex> flow |> Flow.group_by_key() |> Flow.map_values(&Enum.sort/1) |> Enum.sort()
-      [bar: [3, 5], foo: [1, 2, 4]]
+      iex> flow = Flow.from_enumerable([a: 1, b: 2, c: 3, d: 4, e: 5], stages: 1)
+      iex> flow |> Flow.map_values(& &1 * 2) |> Enum.sort()
+      [a: 2, b: 4, c: 6, d: 8, e: 10]
 
   """
   def map_values(flow, value_fun) when is_function(value_fun) do
@@ -1910,6 +1910,11 @@ defmodule Flow do
       raise ArgumentError,
             "#{name}/#{length(args) + 1} cannot be called after emit/1 and on_trigger/2 " <>
               "since events have already been emitted"
+    end
+
+    if has_any_reduce?(flow) do
+      IO.warn("Using a mapper operation, such as map/filter/reject, after reduce/3 is deprecated. " <>
+              "Use Flow.on_trigger/2 instead")
     end
 
     add_operation(flow, {:mapper, name, args})

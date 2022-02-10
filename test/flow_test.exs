@@ -727,34 +727,6 @@ defmodule FlowTest do
       assert Enum.sort(flow) == [6, 10, 14, 18, 22]
     end
 
-    test "keeps ordering after reduce" do
-      flow =
-        @flow
-        |> Flow.reduce(fn -> [] end, &[&1 | &2])
-        |> Flow.filter(&(rem(&1, 2) == 0))
-        |> Flow.map(fn x -> x + 1 end)
-        |> Flow.map(fn x -> x * 2 end)
-
-      assert Enum.sort(flow) == [6, 10, 14, 18, 22]
-    end
-
-    test "keeps ordering after reduce + map_state" do
-      flow =
-        @flow
-        |> Flow.reduce(fn -> [] end, &[&1 | &2])
-        |> Flow.filter(&(rem(&1, 2) == 0))
-        |> Flow.map(fn x -> x + 1 end)
-        |> Flow.map(fn x -> x * 2 end)
-        |> Flow.on_trigger(&{[{&2, Enum.sort(&1)}], &1})
-
-      assert Enum.sort(flow) == [
-               {{0, 4}, [6, 14, 18]},
-               {{1, 4}, [22]},
-               {{2, 4}, []},
-               {{3, 4}, [10]}
-             ]
-    end
-
     test "start_link/2" do
       parent = self()
 
