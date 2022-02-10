@@ -1913,8 +1913,10 @@ defmodule Flow do
     end
 
     if has_any_reduce?(flow) do
-      IO.warn("Using a mapper operation, such as map/filter/reject, after reduce/3 is deprecated. " <>
-              "Use Flow.on_trigger/2 instead")
+      IO.warn(
+        "Using a mapper operation, such as map/filter/reject, after reduce/3 is deprecated. " <>
+          "Use Flow.on_trigger/2 instead"
+      )
     end
 
     add_operation(flow, {:mapper, name, args})
