@@ -755,7 +755,7 @@ defmodule Flow do
     1. You need implement `c:GenStage.handle_subscribe/4` and store
        whenever the stage gets a new producer
 
-    2. You need implement `c:GenStage.handle_cancel/4` and decrease
+    2. You need implement `c:GenStage.handle_cancel/3` and decrease
        whenever the stage loses a producer
 
     3. Once all producers are cancelled, you need to call
@@ -1062,7 +1062,7 @@ defmodule Flow do
     1. You need implement `c:GenStage.handle_subscribe/4` and store
        whenever the stage gets a new producer
 
-    2. You need implement `c:GenStage.handle_cancel/4` and decrease
+    2. You need implement `c:GenStage.handle_cancel/3` and decrease
        whenever the stage loses a producer
 
     3. Once all producers are cancelled, you can terminate:

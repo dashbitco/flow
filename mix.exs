@@ -33,7 +33,7 @@ defmodule Flow.Mixfile do
 
   defp package do
     %{
-      licenses: ["Apache 2"],
+      licenses: ["Apache-2.0"],
       maintainers: ["José Valim", "James Fish"],
       links: %{"GitHub" => "https://github.com/dashbitco/flow"}
     }
