@@ -1,5 +1,14 @@
 # Changelog
 
+## v1.2.0 (2022-02-12)
+
+  * Bug fixes
+    * Fix bugs where shuffling would ignore partitions before/after
+    * Ensure flow options effectively override producer dispatcher
+
+  * Deprecations
+    * Deprecate `Flow.map/2` and friends after `reduce` to avoid confusion regarding bookeeping of state
+
 ## v1.1.0 (2020-12-09)
 
   * Enhancements
