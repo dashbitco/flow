@@ -28,6 +28,8 @@ defmodule Flow.Window do
       Similar to fixed windows, a given event belongs to a single
       window.
 
+  Other common window types can be expressed with Flow functions:
+
     * Session windows - splits incoming events into unique windows
       which is grouped until there is a configured gap between event
       times. Sessions are useful for data that is irregularly
@@ -252,6 +254,38 @@ defmodule Flow.Window do
   callback per trigger but the `done` callback per window.  Unless you are
   relying on functions such as `Flow.departition/4`, there is no distinction
   between count windows and global windows with count triggers.
+
+  ## Session windows (gap between events)
+
+  Session windows allow events to accumulate until a configured time gap
+  between events occurs. This allows for grouping events that occurred close to
+  each other, while allowing the length of the window to vary. Flow does not
+  provide a dedicated Session window type, but it can be constructed using
+  `emit_and_reduce/3` and on_trigger/2`.
+
+      iex> data = [
+      ...>   {"elixir", 2_000_000},
+      ...>   {"erlang", 3_100_000},
+      ...>   {"elixir", 3_200_000},
+      ...>   {"erlang", 4_000_000},
+      ...>   {"elixir", 4_100_000},
+      ...>   {"erlang", 4_150_000}
+      ...> ]
+      iex> max_gap_between_events = 1_000_000
+      iex> flow = Flow.from_enumerable(data) |> Flow.partition(key: fn {k, _} -> k end, stages: 1)
+      iex> flow =
+      ...>   Flow.emit_and_reduce(flow, fn -> %{} end, fn {word, time}, acc ->
+      ...>     {count, previous_time} = Map.get(acc, word, {1, time})
+      ...>
+      ...>     if time - previous_time > max_gap_between_events do
+      ...>       {[{word, {count, previous_time}}], Map.put(acc, word, {1, time})}
+      ...>     else
+      ...>       {[], Map.update(acc, word, {1, time}, fn {count, _} -> {count + 1, time} end)}
+      ...>     end
+      ...>   end)
+      iex> flow = Flow.on_trigger(flow, fn acc -> {Enum.to_list(acc), :unused} end)
+      iex> Enum.to_list(flow)
+      [{"elixir", {1, 2000000}}, {"elixir", {2, 4100000}}, {"erlang", {3, 4150000}}]
   """
 
   @type t :: %{
