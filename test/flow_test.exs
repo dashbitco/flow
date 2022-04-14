@@ -73,6 +73,18 @@ defmodule FlowTest do
     end
   end
 
+  defmodule NonStarter do
+    use GenStage
+
+    def start_link(_) do
+      GenStage.start_link(__MODULE__, [])
+    end
+
+    def init(_) do
+      :ignore
+    end
+  end
+
   describe "on use" do
     test "defines a child_spec/2 function" do
       defmodule MyFlow do
@@ -1023,6 +1035,15 @@ defmodule FlowTest do
              |> Flow.map(fn x -> x * 2 end)
              |> Enum.take(5)
              |> Enum.sort() == [2, 6, 10, 14, 18]
+    end
+  end
+
+  describe "specs-ignored" do
+    @specs [{NonStarter, []}]
+
+    test "ignores ignored stage" do
+      assert Flow.from_specs(@specs)
+             |> Enum.to_list() == []
     end
   end
 

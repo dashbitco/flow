@@ -27,28 +27,34 @@ defmodule Flow.Coordinator do
       Flow.Materialize.materialize(flow, demand, start_link, type, dispatcher)
 
     timeout = Keyword.get(options, :subscribe_timeout, 5_000)
-    producers = Enum.map(producers, &elem(&1, 0))
-    consumers = consumers.(&start_child(supervisor, &1, []))
 
-    for {pid, _} <- intermediary, {consumer, opts} <- consumers do
-      GenStage.sync_subscribe(consumer, [to: pid, cancel: :transient] ++ opts, timeout)
+    producers = for {pid, _} <- producers, pid != :undefined, do: pid
+
+    if producers == [] do
+      :ignore
+    else
+      consumers = consumers.(&start_child(supervisor, &1, []))
+
+      for {pid, _} <- intermediary, {consumer, opts} <- consumers do
+        GenStage.sync_subscribe(consumer, [to: pid, cancel: :transient] ++ opts, timeout)
+      end
+
+      if demand == :forward do
+        for producer <- producers, do: GenStage.demand(producer, demand)
+      end
+
+      to_ref = if inner_or_outer == :inner, do: consumers, else: intermediary
+      refs = Enum.map(to_ref, fn {pid, _} -> Process.monitor(pid) end)
+
+      state = %{
+        intermediary: intermediary,
+        refs: refs,
+        producers: producers,
+        supervisor: supervisor
+      }
+
+      {:ok, state}
     end
-
-    if demand == :forward do
-      for producer <- producers, do: GenStage.demand(producer, demand)
-    end
-
-    to_ref = if inner_or_outer == :inner, do: consumers, else: intermediary
-    refs = Enum.map(to_ref, fn {pid, _} -> Process.monitor(pid) end)
-
-    state = %{
-      intermediary: intermediary,
-      refs: refs,
-      producers: producers,
-      supervisor: supervisor
-    }
-
-    {:ok, state}
   end
 
   # We have a supervisor for the whole flow. We always wait for an error

@@ -1999,6 +1999,9 @@ defmodule Flow do
 
         {:error, reason} ->
           exit({reason, {__MODULE__, :reduce, [flow, acc, fun]}})
+
+        :ignore ->
+          acc
       end
     end
 
