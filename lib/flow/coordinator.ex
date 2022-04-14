@@ -26,13 +26,12 @@ defmodule Flow.Coordinator do
     {producers, intermediary} =
       Flow.Materialize.materialize(flow, demand, start_link, type, dispatcher)
 
-    timeout = Keyword.get(options, :subscribe_timeout, 5_000)
-
     producers = for {pid, _} <- producers, pid != :undefined, do: pid
 
     if producers == [] do
       :ignore
     else
+      timeout = Keyword.get(options, :subscribe_timeout, 5_000)
       consumers = consumers.(&start_child(supervisor, &1, []))
 
       for {pid, _} <- intermediary, {consumer, opts} <- consumers do
