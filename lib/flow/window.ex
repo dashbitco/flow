@@ -261,7 +261,7 @@ defmodule Flow.Window do
   between events occurs. This allows for grouping events that occurred close to
   each other, while allowing the length of the window to vary. Flow does not
   provide a dedicated Session window type, but it can be constructed using
-  `emit_and_reduce/3` and on_trigger/2`.
+  `emit_and_reduce/3` and `on_trigger/2`.
 
       iex> data = [
       ...>   {"elixir", 2_000_000},

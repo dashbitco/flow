@@ -763,9 +763,11 @@ defmodule Flow do
        to yourself, allowing you to terminate after all events have
        been consumed:
 
-          def handle_info(:terminate, state) do
-            {:stop, :shutdown, state}
-          end
+       ```elixir
+       def handle_info(:terminate, state) do
+         {:stop, :shutdown, state}
+       end
+       ```
 
   Given the complexity in guaranteeing termination, we recommend
   developers to use `through_stages/3` and `through_specs/3` only
