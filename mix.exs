@@ -1,7 +1,7 @@
 defmodule Flow.Mixfile do
   use Mix.Project
 
-  @version "1.2.0"
+  @version "1.2.1"
 
   def project do
     [
@@ -12,6 +12,7 @@ defmodule Flow.Mixfile do
       description: "Computational parallel flows for Elixir",
       start_permanent: Mix.env() == :prod,
       deps: deps(),
+      name: "Flow",
       docs: [
         main: "Flow",
         source_ref: "v#{@version}",

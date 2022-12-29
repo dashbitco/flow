@@ -1,5 +1,11 @@
 # Changelog
 
+## v1.2.1 (2022-12-29)
+
+  * Enhancements
+    * Allow stages to be ignored
+    * Add `Flow.child_spec/1`
+
 ## v1.2.0 (2022-02-12)
 
   * Bug fixes
