@@ -307,25 +307,38 @@ defmodule Flow do
 
   Flow allows computations to be started as a group of processes
   which may run indefinitely. This can be done by starting
-  the flow as part of a supervision tree using `Flow.start_link/2`.
+  the flow as part of a supervision tree using `{Flow, your_flow}`
+  as your child specification:
 
-  Since Elixir v1.5, the easiest way to add Flow to your supervision
-  tree is by calling `use Flow` and then defining a `start_link/1`.
+      children = [
+        {Flow,
+         Flow.from_stages(...)
+         |> Flow.flat_map(&String.split(&1, " "))
+         |> Flow.reduce(fn -> %{} end, fn word, acc ->
+           Map.update(acc, word, 1, & &1 + 1)
+         end)}
+      ]
+
+  It is also possible to move a Flow to its own module. This is done by
+  calling `use Flow` and then defining a `start_link/1` function that
+  calls `Flow.start_link/1` at the end:
 
       defmodule MyFlow do
         use Flow
 
         def start_link(_) do
           Flow.from_stages(...)
-          |> ...
-          |> ...
-          |> ...
+          |> Flow.flat_map(&String.split(&1, " "))
+          |> Flow.reduce(fn -> %{} end, fn word, acc ->
+            Map.update(acc, word, 1, & &1 + 1)
+          end)
           |> Flow.start_link()
         end
       end
 
-  The `:shutdown` and `:restart` child spec configurations can be
-  given to `use Flow`.
+  By the default the `Flow` is permanent, which means it is always
+  restarted. The `:shutdown` and `:restart` child spec configurations
+  can be given to `use Flow`.
 
   Flow also provides integration with `GenStage`, allowing you to
   specify child specifications of producers, producer consumers, and
@@ -492,6 +505,14 @@ defmodule Flow do
 
       defoverridable child_spec: 1
     end
+  end
+
+  @doc false
+  def child_spec(%Flow{} = arg) do
+    %{
+      id: __MODULE__,
+      start: {__MODULE__, :start_link, [arg]}
+    }
   end
 
   ## Building

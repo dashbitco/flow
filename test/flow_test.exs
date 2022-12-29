@@ -99,6 +99,22 @@ defmodule FlowTest do
     end
   end
 
+  test "child_spec/2" do
+    parent = self()
+
+    start_supervised!(
+      {Flow,
+       Flow.from_enumerables([[1, 2, 3], [4, 5, 6]], stages: 2)
+       |> Flow.filter(&(rem(&1, 2) == 0))
+       |> Flow.map(&send(parent, &1))}
+    )
+
+    assert_receive 2
+    assert_receive 4
+    assert_receive 6
+    refute_received 1
+  end
+
   describe "errors" do
     test "on multiple reduce calls" do
       message = ~r"cannot call group_by/reduce/emit_and_reduce on a flow after another"
@@ -777,8 +793,8 @@ defmodule FlowTest do
       assert_receive {:consumed, [2]}
       assert_receive {:consumed, [4]}
       assert_receive {:consumed, [6]}
-      assert_receive {:consumed, '\b'}
-      assert_receive {:consumed, '\n'}
+      assert_receive {:consumed, [8]}
+      assert_receive {:consumed, [10]}
     end
 
     test "into_stages/3 with :name", config do
@@ -805,19 +821,19 @@ defmodule FlowTest do
 
       assert_receive {:producer_consumed, [2]}
       assert_receive {:producer_consumed, [6]}
-      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [8]}
       assert_receive {:producer_consumed, [1]}
       assert_receive {:producer_consumed, [5]}
-      assert_receive {:producer_consumed, '\a\t'}
+      assert_receive {:producer_consumed, ~c"\a\t"}
       assert_receive {:producer_consumed, [3]}
       assert_receive {:producer_consumed, [4]}
-      assert_receive {:producer_consumed, '\n'}
+      assert_receive {:producer_consumed, [10]}
 
       assert_receive {:producer_consumed, [2]}
       assert_receive {:producer_consumed, [6]}
-      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [8]}
       assert_receive {:producer_consumed, [4]}
-      assert_receive {:producer_consumed, '\n'}
+      assert_receive {:producer_consumed, [10]}
     end
 
     test "through_stages/3 + into_stages/3" do
@@ -833,25 +849,25 @@ defmodule FlowTest do
 
       assert_receive {:producer_consumed, [2]}
       assert_receive {:producer_consumed, [6]}
-      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [8]}
       assert_receive {:producer_consumed, [1]}
       assert_receive {:producer_consumed, [5]}
-      assert_receive {:producer_consumed, '\a\t'}
+      assert_receive {:producer_consumed, ~c"\a\t"}
       assert_receive {:producer_consumed, [3]}
       assert_receive {:producer_consumed, [4]}
-      assert_receive {:producer_consumed, '\n'}
+      assert_receive {:producer_consumed, [10]}
 
       assert_receive {:producer_consumed, [2]}
       assert_receive {:producer_consumed, [6]}
-      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [8]}
       assert_receive {:producer_consumed, [4]}
-      assert_receive {:producer_consumed, '\n'}
+      assert_receive {:producer_consumed, [10]}
 
       assert_receive {:consumed, [2]}
       assert_receive {:consumed, [6]}
-      assert_receive {:consumed, '\b'}
+      assert_receive {:consumed, [8]}
       assert_receive {:consumed, [4]}
-      assert_receive {:consumed, '\n'}
+      assert_receive {:consumed, [10]}
     end
 
     test "into_specs/3" do
@@ -863,8 +879,8 @@ defmodule FlowTest do
       assert_receive {:consumed, [2]}
       assert_receive {:consumed, [4]}
       assert_receive {:consumed, [6]}
-      assert_receive {:consumed, '\b'}
-      assert_receive {:consumed, '\n'}
+      assert_receive {:consumed, [8]}
+      assert_receive {:consumed, [10]}
     end
 
     test "into_specs/3 with :name", config do
@@ -886,19 +902,19 @@ defmodule FlowTest do
 
       assert_receive {:producer_consumed, [2]}
       assert_receive {:producer_consumed, [6]}
-      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [8]}
       assert_receive {:producer_consumed, [1]}
       assert_receive {:producer_consumed, [5]}
-      assert_receive {:producer_consumed, '\a\t'}
+      assert_receive {:producer_consumed, ~c"\a\t"}
       assert_receive {:producer_consumed, [3]}
       assert_receive {:producer_consumed, [4]}
-      assert_receive {:producer_consumed, '\n'}
+      assert_receive {:producer_consumed, [10]}
 
       assert_receive {:producer_consumed, [2]}
       assert_receive {:producer_consumed, [6]}
-      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [8]}
       assert_receive {:producer_consumed, [4]}
-      assert_receive {:producer_consumed, '\n'}
+      assert_receive {:producer_consumed, [10]}
     end
 
     test "through_specs/3 + into_specs/3" do
@@ -910,25 +926,25 @@ defmodule FlowTest do
 
       assert_receive {:producer_consumed, [2]}
       assert_receive {:producer_consumed, [6]}
-      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [8]}
       assert_receive {:producer_consumed, [1]}
       assert_receive {:producer_consumed, [5]}
-      assert_receive {:producer_consumed, '\a\t'}
+      assert_receive {:producer_consumed, ~c"\a\t"}
       assert_receive {:producer_consumed, [3]}
       assert_receive {:producer_consumed, [4]}
-      assert_receive {:producer_consumed, '\n'}
+      assert_receive {:producer_consumed, [10]}
 
       assert_receive {:producer_consumed, [2]}
       assert_receive {:producer_consumed, [6]}
-      assert_receive {:producer_consumed, '\b'}
+      assert_receive {:producer_consumed, [8]}
       assert_receive {:producer_consumed, [4]}
-      assert_receive {:producer_consumed, '\n'}
+      assert_receive {:producer_consumed, [10]}
 
       assert_receive {:consumed, [2]}
       assert_receive {:consumed, [6]}
-      assert_receive {:consumed, '\b'}
+      assert_receive {:consumed, [8]}
       assert_receive {:consumed, [4]}
-      assert_receive {:consumed, '\n'}
+      assert_receive {:consumed, [10]}
     end
   end
 
