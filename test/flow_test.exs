@@ -347,6 +347,16 @@ defmodule FlowTest do
       assert Process.whereis(config.test) == pid
     end
 
+    test "start_link/2 with merged flow" do
+      parent = self()
+
+      Flow.merge([Flow.from_enumerable([1])], GenStage.DemandDispatcher)
+      |> Flow.map(&send(parent, &1))
+      |> Flow.start_link()
+
+      assert_receive 1
+    end
+
     test "into_stages/3" do
       {:ok, forwarder} = GenStage.start_link(Forwarder, self())
 
@@ -1326,6 +1336,17 @@ defmodule FlowTest do
              |> Flow.reduce(fn -> [] end, &[&1 | &2])
              |> Flow.on_trigger(&{[Enum.sum(&1)], &1})
              |> Enum.sort() == [2550, 7550]
+    end
+
+    test "can start_link merged flow" do
+      parent = self()
+
+      merge_and_shuffle([])
+      |> Flow.map(&send(parent, &1))
+      |> Flow.start_link()
+
+      # TODO: I don't know how to assert here (and if 1 is deterministically the first item to expect)
+      assert_received 1
     end
   end
 
