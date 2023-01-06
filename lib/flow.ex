@@ -1418,13 +1418,13 @@ defmodule Flow do
   end
 
   @doc """
-  Shuffles the data in the given flow (or flows) into a new
-  series of stages with the given window and options.
+  Shuffles the given flow (or flows) into a new series of stages.
 
-  Similar to `partition/2`, this function creates a new series of
-  stages to process the data. However, while `partition/2` routes
-  the data using the partition dispatcher, `shuffle/2` uses
-  `GenStage.DemandDispatcher`.
+  This function defines a new series of stages with the given window
+  and options using `GenStage.DemandDispatcher` to coordinate the
+  demand between them. This function does not shuffle the data by
+  itself. However, given the concurrent nature of Flow, adding new
+  stages often have the indirect consequence of shuffling data too.
 
   ## Examples
 
