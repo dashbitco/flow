@@ -164,8 +164,7 @@ defmodule Flow.Materialize do
     partitions = Enum.to_list(0..(stages - 1))
 
     {producers, consumers,
-     departition_ops(acc, fun, trigger, partitions, acc_fun, merge_fun, done_fun),
-     window}
+     departition_ops(acc, fun, trigger, partitions, acc_fun, merge_fun, done_fun), window}
   end
 
   defp start_producers({:flows, flows}, ops, start_link, window, options, dispatcher) do
