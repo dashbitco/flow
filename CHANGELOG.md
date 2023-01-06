@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.2.2 (2023-01-06)
+
+  * Bug fix
+    * Fix `Flow.merge/2` followed by consumer
+
 ## v1.2.1 (2022-12-29)
 
   * Enhancements
