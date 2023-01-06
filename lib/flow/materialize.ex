@@ -24,7 +24,11 @@ defmodule Flow.Materialize do
 
     options =
       case type do
-        :consumer -> options
+        # The flow itself may have a dispatcher set as option, so we must erase it
+        :consumer -> Keyword.delete(options, :dispatcher)
+        # Otherwise the dispatcher given as argument always overrides the one in options.
+        # However, in some cases, the dispatcher is taken from the options itself
+        # (such as the root of the tree)
         _ -> Keyword.put(options, :dispatcher, dispatcher)
       end
 

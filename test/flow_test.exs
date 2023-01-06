@@ -347,6 +347,16 @@ defmodule FlowTest do
       assert Process.whereis(config.test) == pid
     end
 
+    test "start_link/2 with merged flow" do
+      parent = self()
+
+      Flow.merge([Flow.from_enumerable([1])], GenStage.DemandDispatcher)
+      |> Flow.map(&send(parent, &1))
+      |> Flow.start_link()
+
+      assert_receive 1
+    end
+
     test "into_stages/3" do
       {:ok, forwarder} = GenStage.start_link(Forwarder, self())
 
