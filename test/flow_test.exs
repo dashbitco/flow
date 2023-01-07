@@ -192,6 +192,17 @@ defmodule FlowTest do
     end
 
     @tag :capture_log
+    test "on error in producer started via non-linked stream" do
+      assert catch_exit(
+               :start
+               |> Stream.iterate(fn _ -> raise "oops" end)
+               |> Flow.from_enumerable(stages: 1, max_demand: 1)
+               |> Flow.stream(link: false)
+               |> Enum.to_list()
+             )
+    end
+
+    @tag :capture_log
     test "on error in producer started via start_link" do
       Process.flag(:trap_exit, true)
 

@@ -19,13 +19,32 @@ See documentation for [Flow](https://hexdocs.pm/flow) or [José Valim's keynote 
 
 ## Installation
 
-Flow requires Elixir v1.5 and Erlang/OTP 19+. Add `:flow` to your list of dependencies in mix.exs:
+Flow requires Elixir v1.7 and Erlang/OTP 22+. Add `:flow` to your list of dependencies in mix.exs:
 
 ```elixir
 def deps do
   [{:flow, "~> 1.0"}]
 end
 ```
+
+### Usage in Livebook
+
+Flow pipelines starts several processes linked to the current process. This means that, if there is an error in your Flow, it will shut down the Livebook runtime. You can avoid this in your notebooks in two different ways:
+
+1. Use `Flow.stream(flow, link: false)` to explicitly convert a Flow to a non-linked stream. You can them invoke `Enum` and `Stream` functions regularly:
+
+  ```elixir
+  Flow.from_enumerable([1, 2, 3])
+  |> Flow.map(& &1 * 2)
+  |> Flow.stream(link: false)
+  |> Enum.to_list()
+  ```
+
+2. By trapping exits once before the Flow computation starts:
+
+  ```elixir
+  Process.flag(:trap_exit, true)
+  ```
 
 ## License
 

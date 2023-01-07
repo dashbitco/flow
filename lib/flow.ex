@@ -999,6 +999,11 @@ defmodule Flow do
   This runs the given flow as a stream for its side-effects. No
   items are sent from the flow to the current process.
 
+  ## Options
+
+    * `:link` - if the Flow supervision tree should be linked
+      to the current process. Defaults to `true`.
+
   ## Examples
 
       iex> parent = self()
@@ -1011,9 +1016,51 @@ defmodule Flow do
 
   """
   @spec run(t) :: :ok
-  def run(flow) do
-    [] = flow |> emit_nothing() |> Enum.to_list()
+  def run(flow, opts \\ []) do
+    [] = flow |> emit_nothing() |> stream(opts) |> Enum.to_list()
     :ok
+  end
+
+  @doc """
+  Explicitly converts the Flow into a Stream.
+
+  All Flows behave as a stream but this function performs an
+  explicit conversion. However, since Flow will link to the
+  current process, this function can be useful to convert it
+  to a non-linked stream by passing the `link: false` option.
+
+  ## Options
+
+    * `:link` - if the Flow supervision tree should be linked
+      to the current process. Defaults to `true`.
+
+  ## Examples
+
+      iex> Flow.from_enumerable([1, 2, 3])
+      ...> |> Flow.map(& &1 * 2)
+      ...> |> Flow.stream()
+      ...> |> Enum.to_list()
+      [2, 4, 6]
+
+  """
+  def stream(flow, opts \\ []) do
+    start = if Keyword.get(opts, :link, true), do: :start_link, else: :start
+
+    fn acc, fun ->
+      opts = [demand: :accumulate]
+      args = [flow, :producer_consumer, {:outer, fn _ -> [] end}, opts]
+
+      case apply(Flow.Coordinator, start, args) do
+        {:ok, pid} ->
+          Flow.Coordinator.stream(pid).(acc, fun)
+
+        {:error, reason} ->
+          exit({reason, {__MODULE__, :stream, [flow, acc, fun]}})
+
+        :ignore ->
+          acc
+      end
+    end
   end
 
   @doc """
@@ -1523,7 +1570,7 @@ defmodule Flow do
        {"x", 1}]
 
   """
-  @spec reduce(t, (() -> acc), (term, acc -> acc)) :: t when acc: term()
+  @spec reduce(t, (-> acc), (term, acc -> acc)) :: t when acc: term()
   def reduce(flow, acc_fun, reducer_fun) when is_function(reducer_fun, 2) do
     cond do
       has_any_reduce?(flow) ->
@@ -1573,7 +1620,7 @@ defmodule Flow do
       [[1], [1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5]]
 
   """
-  @spec emit_and_reduce(t, (() -> acc), (term, acc -> {[event], acc})) :: t
+  @spec emit_and_reduce(t, (-> acc), (term, acc -> {[event], acc})) :: t
         when acc: term(), event: term()
   def emit_and_reduce(flow, acc_fun, reducer_fun) when is_function(reducer_fun, 2) do
     cond do
@@ -2014,18 +2061,7 @@ defmodule Flow do
 
   defimpl Enumerable do
     def reduce(flow, acc, fun) do
-      opts = [demand: :accumulate]
-
-      case Flow.Coordinator.start_link(flow, :producer_consumer, {:outer, fn _ -> [] end}, opts) do
-        {:ok, pid} ->
-          Flow.Coordinator.stream(pid).(acc, fun)
-
-        {:error, reason} ->
-          exit({reason, {__MODULE__, :reduce, [flow, acc, fun]}})
-
-        :ignore ->
-          acc
-      end
+      Flow.stream(flow).(acc, fun)
     end
 
     def count(_flow) do
