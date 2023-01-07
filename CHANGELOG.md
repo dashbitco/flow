@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.2.3 (2023-01-07)
+
+  * Enhancements
+    * Add `Flow.stream/2` and `Flow.run/2` which accept `link: false`
+
 ## v1.2.2 (2023-01-06)
 
   * Bug fix
