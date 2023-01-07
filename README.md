@@ -33,18 +33,18 @@ Flow pipelines starts several processes linked to the current process. This mean
 
 1. Use `Flow.stream(flow, link: false)` to explicitly convert a Flow to a non-linked stream. You can them invoke `Enum` and `Stream` functions regularly:
 
-  ```elixir
-  Flow.from_enumerable([1, 2, 3])
-  |> Flow.map(& &1 * 2)
-  |> Flow.stream(link: false)
-  |> Enum.to_list()
-  ```
+    ```elixir
+    Flow.from_enumerable([1, 2, 3])
+    |> Flow.map(& &1 * 2)
+    |> Flow.stream(link: false)
+    |> Enum.to_list()
+    ```
 
 2. By trapping exits once before the Flow computation starts:
 
-  ```elixir
-  Process.flag(:trap_exit, true)
-  ```
+    ```elixir
+    Process.flag(:trap_exit, true)
+    ```
 
 ## License
 
