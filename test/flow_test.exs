@@ -157,7 +157,7 @@ defmodule FlowTest do
 
     test "on mapper after emit/1" do
       message =
-        ~r"map/2 cannot be called after emit/1 and on_trigger/2 since events have already been emitted"
+        ~r"map/2 cannot be called after group_by/reduce/emit_and_reduce operation"
 
       assert_raise ArgumentError, message, fn ->
         Flow.from_enumerable([1, 2, 3])

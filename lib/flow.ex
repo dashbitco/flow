@@ -290,6 +290,16 @@ defmodule Flow do
   functionality provided by Flow can also be built by hand using the
   `emit_and_reduce/3` and `on_trigger/2` functions.
 
+  In a nutshell, each stage in Flow goes through those steps:
+
+    * mapping and filtering (`map/2`, `filter/2`, `flat_map/2`)
+    * reducing (`reduce/3`, `group_by/3`, `emit_and_reduce/3`)
+    * emitting events (`emit_and_reduce/3`, `emit/2`, `on_trigger/2`)
+
+  The accumulator from reducing operations is shared with the one
+  from emitting events. `emit_and_reduce/3` is special operation
+  that allows both emitting and reducing events in one step.
+
   See `Flow.Window` for a complete introduction to windows and triggers.
 
   ## Supervisable flows
@@ -1546,9 +1556,7 @@ defmodule Flow do
 
   `acc_fun` is a function that receives no arguments and returns
   the actual accumulator. The `acc_fun` function is invoked per window
-  whenever a new window starts. If a trigger is emitted and it is
-  configured to reset the accumulator, the `acc_fun` function will
-  be invoked once again.
+  whenever a new window starts.
 
   Reducing will accumulate data until a trigger is emitted
   or until a window completes. When that happens, the returned
@@ -1593,9 +1601,7 @@ defmodule Flow do
 
   `acc_fun` is a function that receives no arguments and returns
   the actual accumulator. The `acc_fun` function is invoked per window
-  whenever a new window starts. If a trigger is emitted and it is
-  configured to reset the accumulator, the `acc_fun` function will
-  be invoked once again.
+  whenever a new window starts.
 
   This function behaves similarly to `reduce/3`, but in addition to
   accumulating data, it also gives full control over what will be
@@ -1837,18 +1843,12 @@ defmodule Flow do
   def emit(flow, type) do
     unless has_any_reduce?(flow) do
       raise ArgumentError,
-            "emit/2 must be called after a group_by/reduce operation as it works on the accumulated state"
-    end
-
-    if has_emit_reduce?(flow) do
-      raise ArgumentError,
-            "emit/2 cannot be called after emit_and_reduce/3 since events have already been emitted " <>
-              "(use on_trigger/2 if you want to further emit events or modify the state)"
+            "emit/2 must be called after a group_by/reduce/emit_and_reduce operation " <>
+              "as it works on the accumulated state"
     end
 
     if has_on_trigger?(flow) do
-      raise ArgumentError,
-            "emit/2 cannot be called after on_trigger/2 since events have already been emitted"
+      raise ArgumentError, "emit/2 cannot be called after emit/on_trigger"
     end
 
     case type do
@@ -1868,7 +1868,8 @@ defmodule Flow do
   data while leveraging the parallelism between stages.
 
   The given callback must return a tuple with elements to emit
-  and the new accumulator.
+  and the new accumulator. The new accumulator will then be used
+  for subsequent reductions by `reduce/3`, `group_by/3`, and friends.
 
   ## The callback arguments
 
@@ -1963,30 +1964,17 @@ defmodule Flow do
     end
 
     if has_on_trigger?(flow) do
-      raise ArgumentError, "on_trigger/2 can only be called once per partition"
+      raise ArgumentError, "on_trigger/2 cannot be called after emit/on_trigger"
     end
 
     add_operation(flow, {:on_trigger, on_trigger})
   end
 
   defp add_mapper(flow, name, args) do
-    if has_emit_reduce?(flow) do
-      raise ArgumentError,
-            "#{name}/#{length(args) + 1} cannot be called after emit_and_reduce/3 since events " <>
-              "have already been emitted (use on_trigger/2 if you want to further emit events or modify the state)"
-    end
-
-    if has_on_trigger?(flow) do
-      raise ArgumentError,
-            "#{name}/#{length(args) + 1} cannot be called after emit/1 and on_trigger/2 " <>
-              "since events have already been emitted"
-    end
-
     if has_any_reduce?(flow) do
-      IO.warn(
-        "Using a mapper operation, such as map/filter/reject, after reduce/3 is deprecated. " <>
-          "Use Flow.on_trigger/2 instead"
-      )
+      raise ArgumentError,
+            "#{name}/#{length(args) + 1} cannot be called after group_by/reduce/emit_and_reduce operation " <>
+              "(use on_trigger/2 if you want to further emit events or the accumulated state)"
     end
 
     add_operation(flow, {:mapper, name, args})
@@ -2006,10 +1994,6 @@ defmodule Flow do
 
   defp has_any_reduce?(%{operations: operations}) do
     Enum.any?(operations, &match?({op, _, _} when op in [:reduce, :emit_and_reduce], &1))
-  end
-
-  defp has_emit_reduce?(%{operations: operations}) do
-    Enum.any?(operations, &match?({:emit_and_reduce, _, _}, &1))
   end
 
   defp has_on_trigger?(%{operations: operations}) do
