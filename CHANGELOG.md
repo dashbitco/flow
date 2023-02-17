@@ -23,7 +23,7 @@
     * Ensure flow options effectively override producer dispatcher
 
   * Deprecations
-    * Deprecate `Flow.map/2` and friends after `reduce` to avoid confusion regarding bookeeping of state
+    * Deprecate `Flow.map/2` and friends after `reduce` to avoid confusion regarding bookkeeping of state
 
 ## v1.1.0 (2020-12-09)
 
