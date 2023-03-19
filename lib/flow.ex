@@ -1104,19 +1104,20 @@ defmodule Flow do
   `consumers` is a list of already running stages that have type
   `:consumer` or `:producer_consumer`. Each element represents the
   consumer or a tuple with the consumer and the subscription options
-  as defined in `GenStage.sync_subscribe/2`. If instead you want the
-  consumers to be started alongside the flow, see `into_specs/3`
-  instead.
+  as defined in `GenStage.sync_subscribe/2`.
+
+  The consumer stages given to this function won't be managed
+  by Flow. If the Flow terminates, they will continue running.
+  If instead you want the consumers to be started and managed
+  alongside the flow, use `into_specs/3` instead.
 
   The `pid` returned by this function identifies a coordinator
   process. While it is possible to send subscribe requests to
   the coordinator process, the coordinator process will simply
   redirect the subscription to the proper flow processes and
-  cancel the initial subscription. This means late subscriptions
-  should use at `cancel: :transient` (which is the default for
-  stage subscriptions). Keep in mind this implies consumers will
-  continue running when the producers exits with `:normal` or
-  `:shutdown` reason.
+  cancel the initial subscription. This means subscriptions
+  to the flow should use at `cancel: :transient` (which is
+  the default for stage subscriptions).
 
   The coordinator exits with reason `:normal` only if all
   consumers exit with reason `:normal`. Otherwise exits with

@@ -24,11 +24,12 @@ defmodule Flow.MapReducer do
     end
   end
 
-  def handle_subscribe(:consumer, _, _, state) do
-    {:automatic, state}
+  def handle_subscribe(:consumer, _opts, {pid, ref}, {producers, status, index, acc, reducer}) do
+    status = consumer_status(pid, ref, status)
+    {:automatic, {producers, status, index, acc, reducer}}
   end
 
-  def handle_cancel(_, {_, ref}, {producers, status, index, acc, reducer}) do
+  def handle_cancel(_reason, {_, ref}, {producers, status, index, acc, reducer}) do
     case producers do
       %{^ref => _} ->
         Process.delete(ref)
@@ -36,7 +37,14 @@ defmodule Flow.MapReducer do
         {:noreply, events, {Map.delete(producers, ref), status, index, acc, reducer}}
 
       _ ->
-        {:noreply, [], {producers, status, index, acc, reducer}}
+        consumers = Map.delete(status.consumers, ref)
+        status = %{status | consumers: consumers}
+
+        if consumers == %{} do
+          {:stop, :normal, {producers, status, index, acc, reducer}}
+        else
+          {:noreply, [], {producers, status, index, acc, reducer}}
+        end
     end
   end
 
@@ -68,11 +76,15 @@ defmodule Flow.MapReducer do
   ## Helpers
 
   defp build_status(_type, trigger) do
-    %{producers: %{}, done?: false, trigger: trigger}
+    %{producers: %{}, consumers: %{}, done?: false, trigger: trigger}
   end
 
   defp producer_status(pid, ref, %{producers: producers} = status) do
     %{status | producers: Map.put(producers, ref, pid)}
+  end
+
+  defp consumer_status(pid, ref, %{consumers: consumers} = status) do
+    %{status | consumers: Map.put(consumers, ref, pid)}
   end
 
   defp done_status(%{producers: map, done?: true} = status, _index, acc, _ref) when map == %{} do
