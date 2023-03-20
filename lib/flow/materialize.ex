@@ -250,7 +250,7 @@ defmodule Flow.Materialize do
 
     %{
       id: GenStage.Streamer,
-      start: {GenStage, :from_enumerable, [stream, opts]},
+      start: {GenStage, :from_enumerable, [stream, [on_cancel: :stop] ++ opts]},
       shutdown: shutdown,
       modules: [GenStage.Streamer]
     }

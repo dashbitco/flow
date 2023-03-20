@@ -477,6 +477,19 @@ defmodule FlowTest do
       assert_receive {:consumed, [4, 6]}
     end
 
+    test "on halt without intermediary" do
+      {:links, [coordinator]} =
+        Stream.cycle([1, 2, 3])
+        |> Flow.from_enumerable()
+        |> Stream.take(10)
+        |> Enum.reduce(nil, fn _, acc ->
+          acc || Process.info(self(), :links)
+        end)
+
+      ref = Process.monitor(coordinator)
+      assert_receive {:DOWN, ^ref, _, _, _}
+    end
+
     test "on halt with intermediary" do
       {:links, [coordinator]} =
         Stream.cycle([1, 2, 3])
