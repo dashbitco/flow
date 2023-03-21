@@ -1,7 +1,7 @@
 defmodule Flow.Mixfile do
   use Mix.Project
 
-  @version "1.2.3"
+  @version "1.2.4"
 
   def project do
     [

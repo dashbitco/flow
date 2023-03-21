@@ -1,5 +1,10 @@
 # Changelog
 
+## v1.2.4 (2023-03-21)
+
+  * Bug fixes
+    * Make sure flows are garbage collected when consumed as a stream which is halted
+
 ## v1.2.3 (2023-01-07)
 
   * Enhancements
