@@ -22,7 +22,7 @@ defmodule Flow.Mixfile do
   end
 
   def application do
-    [applications: [:logger, :gen_stage]]
+    [extra_applications: [:logger]]
   end
 
   defp deps do
