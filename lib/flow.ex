@@ -1298,7 +1298,7 @@ defmodule Flow do
   Flow uses GenStage which sends events in batches, controlled by
   `min_demand` and `max_demand`. This callback allows you to hook
   into this batch, before any `map` or `reduce` operation is invoked.
-  This often useful to preload data that is used in later stages.
+  This is often useful to preload data that is used in later stages.
   """
   def map_batch(flow, function) when is_function(function, 1) do
     case flow.operations do
