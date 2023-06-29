@@ -8,7 +8,7 @@ on:
 
 jobs:
   test:
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     env:
       MIX_ENV: test
     strategy:
@@ -17,10 +17,13 @@ jobs:
         include:
           - pair:
               elixir: 1.7.4
-              otp: 19.3.6.13
+              otp: 22.3.4
           - pair:
               elixir: 1.14.2
-              otp: 24.3
+              otp: 24.3.4.1
+          - pair:
+              elixir: 1.15.0
+              otp: 26.0.1
             lint: lint
     steps:
       - uses: actions/checkout@v2
