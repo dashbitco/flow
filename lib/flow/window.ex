@@ -441,7 +441,7 @@ defmodule Flow.Window do
   We recommend looking at the implementation of `trigger_every/2` as
   an example of a custom trigger.
   """
-  @spec trigger(t, (() -> acc), trigger_fun) :: t
+  @spec trigger(t, (-> acc), trigger_fun) :: t
         when trigger_fun: ([event], acc -> trigger_fun_return),
              trigger_fun_return: cont_tuple | cont_tuple_with_emitted_events | trigger_tuple,
              cont_tuple: {:cont, acc},

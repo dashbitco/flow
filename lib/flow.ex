@@ -1579,7 +1579,7 @@ defmodule Flow do
        {"x", 1}]
 
   """
-  @spec reduce(t, (() -> acc), (term, acc -> acc)) :: t when acc: term()
+  @spec reduce(t, (-> acc), (term, acc -> acc)) :: t when acc: term()
   def reduce(flow, acc_fun, reducer_fun) when is_function(reducer_fun, 2) do
     cond do
       has_any_reduce?(flow) ->
@@ -1627,7 +1627,7 @@ defmodule Flow do
       [[1], [1, 2], [1, 2, 3], [2, 3, 4], [3, 4, 5]]
 
   """
-  @spec emit_and_reduce(t, (() -> acc), (term, acc -> {[event], acc})) :: t
+  @spec emit_and_reduce(t, (-> acc), (term, acc -> {[event], acc})) :: t
         when acc: term(), event: term()
   def emit_and_reduce(flow, acc_fun, reducer_fun) when is_function(reducer_fun, 2) do
     cond do
