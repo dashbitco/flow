@@ -16,25 +16,30 @@ jobs:
       matrix:
         include:
           - pair:
-              elixir: 1.7.4
-              otp: 22.3.4
+              elixir: 1.7.x
+              otp: 22.x
           - pair:
-              elixir: 1.14.2
-              otp: 24.3.4.1
-          - pair:
-              elixir: 1.15.0
-              otp: 26.0.1
+              elixir: 1.17.x
+              otp: 27.x
             lint: lint
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
 
       - uses: erlef/setup-beam@v1
         with:
           otp-version: ${{matrix.pair.otp}}
           elixir-version: ${{matrix.pair.elixir}}
 
-      - name: Install Dependencies
-        run: mix deps.get --only test
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: ${{ runner.os }}-mix-${{matrix.pair.elixir}}-${{matrix.pair.otp}}-${{ hashFiles('**/mix.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-mix-${{matrix.pair.elixir}}-${{matrix.pair.otp}}-
+
+      - run: mix deps.get --only test
 
       - run: mix format --check-formatted
         if: ${{ matrix.lint }}
