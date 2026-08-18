@@ -19,7 +19,7 @@ See documentation for [Flow](https://hexdocs.pm/flow) or [José Valim's keynote 
 
 ## Installation
 
-Flow requires Elixir v1.7 and Erlang/OTP 22+. Add `:flow` to your list of dependencies in mix.exs:
+Flow requires Elixir v1.15 and Erlang/OTP 26+. Add `:flow` to your list of dependencies in mix.exs:
 
 ```elixir
 def deps do
