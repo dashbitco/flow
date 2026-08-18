@@ -7,7 +7,7 @@ defmodule Flow.Mixfile do
     [
       app: :flow,
       version: @version,
-      elixir: "~> 1.7",
+      elixir: "~> 1.15",
       package: package(),
       description: "Computational parallel flows for Elixir",
       start_permanent: Mix.env() == :prod,
