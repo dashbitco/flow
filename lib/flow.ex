@@ -1538,8 +1538,12 @@ defmodule Flow do
 
   defp stages(options) do
     case Keyword.fetch(options, :stages) do
-      {:ok, _} ->
+      {:ok, stages} when is_integer(stages) and stages > 0 ->
         options
+
+      {:ok, stages} ->
+        raise ArgumentError,
+              ":stages must be a positive integer, got: #{inspect(stages)}"
 
       :error ->
         stages = System.schedulers_online()
