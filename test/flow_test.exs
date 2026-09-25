@@ -115,6 +115,24 @@ defmodule FlowTest do
     refute_received 1
   end
 
+  describe ":stages option" do
+    test "requires a positive integer when constructing a flow" do
+      constructors = [
+        fn stages -> Flow.from_enumerable([1], stages: stages) end,
+        fn stages -> Flow.from_enumerables([[1]], stages: stages) end,
+        fn stages -> Flow.from_stages([self()], stages: stages) end,
+        fn stages -> Flow.from_specs([{Counter, 0}], stages: stages) end,
+        fn stages -> Flow.partition(Flow.from_enumerable([1]), stages: stages) end
+      ]
+
+      for constructor <- constructors, stages <- [0, -1, :invalid] do
+        assert_raise ArgumentError, ~r/:stages must be a positive integer/, fn ->
+          constructor.(stages)
+        end
+      end
+    end
+  end
+
   describe "errors" do
     test "on multiple reduce calls" do
       message = ~r"cannot call group_by/reduce/emit_and_reduce on a flow after another"
