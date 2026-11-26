@@ -179,6 +179,34 @@ defmodule FlowTest do
     end
 
     @tag :capture_log
+    test "on dispatcher that does not implement GenStage.Dispatcher" do
+      Process.flag(:trap_exit, true)
+
+      assert {{%ArgumentError{message: message}, _stacktrace}, _} =
+               catch_exit(
+                 [Flow.from_enumerable([1, 2, 3])]
+                 |> Flow.merge({Flow.Coordinator, []})
+                 |> Enum.to_list()
+               )
+
+      assert message =~ ~r"expected :dispatcher to implement the GenStage.Dispatcher behaviour"
+    end
+
+    @tag :capture_log
+    test "on dispatcher that is not an atom or a {atom, list} tuple" do
+      Process.flag(:trap_exit, true)
+
+      assert {{%ArgumentError{message: message}, _stacktrace}, _} =
+               catch_exit(
+                 [Flow.from_enumerable([1, 2, 3])]
+                 |> Flow.merge({"not a module", []})
+                 |> Enum.to_list()
+               )
+
+      assert message =~ ~r"expected :dispatcher to be an atom or a {atom, list} tuple"
+    end
+
+    @tag :capture_log
     test "on error in producer started via run" do
       Process.flag(:trap_exit, true)
 

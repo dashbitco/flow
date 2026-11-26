@@ -181,6 +181,8 @@ defmodule Flow.Materialize do
         end
       end)
 
+    validate_dispatcher!(up_dispatcher)
+
     {producers, consumers} =
       Enum.reduce(flows, {[], []}, fn flow, {producers_acc, consumers_acc} ->
         {producers, consumers} =
@@ -206,6 +208,7 @@ defmodule Flow.Materialize do
          dispatcher
        ) do
     up_dispatcher = options[:dispatcher] || GenStage.DemandDispatcher
+    validate_dispatcher!(up_dispatcher)
 
     {producers, intermediary} =
       materialize(flow, :forward, start_link, :producer_consumer, up_dispatcher)
@@ -293,6 +296,31 @@ defmodule Flow.Materialize do
 
     instead got: #{inspect(other)}
     """
+  end
+
+  # The dispatcher is read from the flow's options and GenStage calls its init/1,
+  # so make sure it is a dispatcher and not an arbitrary module.
+  defp validate_dispatcher!({dispatcher, opts}) when is_list(opts) do
+    validate_dispatcher!(dispatcher)
+  end
+
+  defp validate_dispatcher!(dispatcher) when is_atom(dispatcher) do
+    callbacks = GenStage.Dispatcher.behaviour_info(:callbacks)
+
+    # Check what functions are actually implemented vs. just checking the behaviour is declared
+    implemented? =
+      Code.ensure_loaded?(dispatcher) and
+        Enum.all?(callbacks, fn {fun, arity} -> function_exported?(dispatcher, fun, arity) end)
+
+    if not implemented? do
+      raise ArgumentError,
+            "expected :dispatcher to implement the GenStage.Dispatcher behaviour, " <>
+              "got: #{inspect(dispatcher)}"
+    end
+  end
+
+  defp validate_dispatcher!(_dispatcher) do
+    raise ArgumentError, "expected :dispatcher to be an atom or a {atom, list} tuple"
   end
 
   # If the upstream dispatcher and the current dispatcher are the same,
